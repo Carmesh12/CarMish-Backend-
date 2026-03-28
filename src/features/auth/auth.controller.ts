@@ -1,13 +1,11 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Headers,
-  Post,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { SignupUserDto } from './dto/signup-user.dto';
+import { SignupVendorDto } from './dto/signup-vendor.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { CurrentUser } from './decorators/current-user.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -18,43 +16,44 @@ export class AuthController {
     return this.authService.login(dto.email, dto.password);
   }
 
-  @Get('me')
-  me(@Headers() headers: Record<string, string | string[] | undefined>) {
-    const token = this.extractTokenFromHeaders(headers);
-    if (!token) {
-      throw new UnauthorizedException('Missing auth token');
-    }
-    return this.authService.getMeByToken(token);
+  @Post('signup')
+  signup(@Body() dto: SignupUserDto) {
+    return this.authService.signupUser(
+      dto.email,
+      dto.password,
+      dto.firstName,
+      dto.lastName,
+      dto.phoneNumber,
+    );
   }
 
-  private extractTokenFromHeaders(
-    headers: Record<string, string | string[] | undefined>,
-  ): string | undefined {
-    const getFirstString = (v: string | string[] | undefined) => {
-      if (Array.isArray(v)) return v[0];
-      return v;
-    };
+  @Post('signup/vendor')
+  signupVendor(@Body() dto: SignupVendorDto) {
+    return this.authService.signupVendor(
+      dto.email,
+      dto.password,
+      dto.businessName,
+      dto.contactPersonName,
+      dto.phoneNumber,
+      dto.businessAddress,
+    );
+  }
 
-    for (const [key, value] of Object.entries(headers)) {
-      const lowerKey = key.toLowerCase();
-      const valueAsString = getFirstString(value);
-      if (!valueAsString) continue;
+  @Post('refresh')
+  refresh(@Body() dto: RefreshTokenDto) {
+    return this.authService.refreshTokens(dto.refreshToken);
+  }
 
-      if (lowerKey === 'authorization') {
-        const match = valueAsString.match(/^Bearer\s+(.+)$/i);
-        return match ? match[1] : valueAsString;
-      }
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  logout(@Body() dto: RefreshTokenDto) {
+    return this.authService.logout(dto.refreshToken);
+  }
 
-      if (lowerKey === 'access-token' || lowerKey === 'accesstoken') {
-        return valueAsString;
-      }
-
-      if (lowerKey === 'x-access-token') {
-        return valueAsString;
-      }
-    }
-
-    return undefined;
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  me(@CurrentUser() user: { id: string; email: string; role: string }) {
+    return this.authService.getMe(user.id);
   }
 }
 

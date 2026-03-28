@@ -27,9 +27,10 @@ model Account {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  user   User?
-  vendor Vendor?
-  admin  Admin?
+  user          User?
+  vendor        Vendor?
+  admin         Admin?
+  refreshTokens RefreshToken[]
 }
 
 model User {
@@ -69,4 +70,14 @@ model Admin {
   updatedAt DateTime @updatedAt
 
   account Account @relation(fields: [accountId], references: [id])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String   @unique
+  accountId String   @db.Uuid
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }

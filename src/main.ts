@@ -1,13 +1,21 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
-  // Enable CORS so the frontend can communicate with the backend
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+
   app.enableCors({
-    origin: 'http://localhost:5173', // Vite default port
+    origin: 'http://localhost:5173',
     credentials: true,
   });
 
