@@ -1,14 +1,13 @@
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { unlinkSync } from 'fs';
-import { join } from 'path';
 import { Role } from '@prisma/client';
+import { CloudinaryService } from '../../common/cloudinary/cloudinary.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { publicPathForUserProfilePhoto } from './user-profile-photo.multer';
 import { ChangeUserPasswordDto } from './dto/change-user-password.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 
@@ -35,7 +34,10 @@ type AccountUserRow = {
 
 @Injectable()
 export class UserProfileService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) {}
 
   async getProfile(accountId: string) {
     const account = await this.loadUserAccount(accountId);
@@ -113,37 +115,35 @@ export class UserProfileService {
     return { message: 'Password updated successfully' };
   }
 
-  async setProfilePhotoFromUpload(accountId: string, filename: string) {
+  async updateProfileImage(
+    accountId: string,
+    file: Express.Multer.File,
+  ): Promise<{ message: string; profileImageUrl: string }> {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Image file is required');
+    }
+
     const account = await this.loadUserAccount(accountId);
     const userId = account.user!.id;
-    const prev = account.user!.profileImageUrl;
-    const publicPath = publicPathForUserProfilePhoto(filename);
 
-    await this.removeStoredUserPhotoFile(prev);
+    let profileImageUrl: string;
+    try {
+      profileImageUrl = await this.cloudinaryService.uploadImageBuffer(
+        file.buffer,
+      );
+    } catch {
+      throw new InternalServerErrorException('Could not upload image');
+    }
 
     await this.prisma.user.update({
       where: { id: userId },
-      data: { profileImageUrl: publicPath },
+      data: { profileImageUrl },
     });
 
-    const updated = await this.loadUserAccount(accountId);
-    return this.toProfileResponse(updated);
-  }
-
-  async removeProfilePhoto(accountId: string) {
-    const account = await this.loadUserAccount(accountId);
-    const userId = account.user!.id;
-    const prev = account.user!.profileImageUrl;
-
-    await this.removeStoredUserPhotoFile(prev);
-
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { profileImageUrl: null },
-    });
-
-    const updated = await this.loadUserAccount(accountId);
-    return this.toProfileResponse(updated);
+    return {
+      message: 'Profile image uploaded successfully',
+      profileImageUrl,
+    };
   }
 
   async getDashboard(accountId: string) {
@@ -258,26 +258,5 @@ export class UserProfileService {
     const missingFields = checks.filter((c) => !c.filled).map((c) => c.key);
     const percentage = Math.round((completedFields.length / 5) * 100);
     return { percentage, completedFields, missingFields };
-  }
-
-  private removeStoredUserPhotoFile(stored: string | null) {
-    if (!stored?.startsWith('/uploads/user-profiles/')) {
-      return;
-    }
-    const name = stored.replace('/uploads/user-profiles/', '');
-    if (!name || /[/\\]/.test(name) || name.includes('..')) {
-      return;
-    }
-    const abs = join(
-      process.cwd(),
-      'uploads',
-      'user-profiles',
-      name,
-    );
-    try {
-      unlinkSync(abs);
-    } catch {
-      /* file may already be gone */
-    }
   }
 }

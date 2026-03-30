@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
-import { AuthModule } from '../auth/auth.module';
+import { CloudinaryModule } from '../../common/cloudinary/cloudinary.module';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { AuthModule } from '../auth/auth.module';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserProfileController } from './user-profile.controller';
 import { UserProfileService } from './user-profile.service';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, CloudinaryModule],
   controllers: [UserProfileController],
   providers: [UserProfileService, RolesGuard],
 })

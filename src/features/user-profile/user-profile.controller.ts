@@ -2,12 +2,10 @@ import {
   BadRequestException,
   Body,
   Controller,
-  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Patch,
-  Post,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -21,7 +19,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { ChangeUserPasswordDto } from './dto/change-user-password.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { UserProfileService } from './user-profile.service';
-import { userProfilePhotoMulterOptions } from './user-profile-photo.multer';
+import { userProfileImageMulterOptions } from './user-profile-image.multer';
 
 type JwtUser = { id: string; email: string; role: string };
 
@@ -53,26 +51,17 @@ export class UserProfileController {
     return this.userProfileService.changePassword(user.id, dto);
   }
 
-  @Post('profile/photo')
+  @Patch('profile/image')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('file', userProfilePhotoMulterOptions))
-  uploadProfilePhoto(
+  @UseInterceptors(FileInterceptor('image', userProfileImageMulterOptions))
+  updateProfileImage(
     @CurrentUser() user: JwtUser,
     @UploadedFile() file: Express.Multer.File | undefined,
   ) {
-    if (!file?.filename) {
+    if (!file?.buffer?.length) {
       throw new BadRequestException('Image file is required');
     }
-    return this.userProfileService.setProfilePhotoFromUpload(
-      user.id,
-      file.filename,
-    );
-  }
-
-  @Delete('profile/photo')
-  @HttpCode(HttpStatus.OK)
-  removeProfilePhoto(@CurrentUser() user: JwtUser) {
-    return this.userProfileService.removeProfilePhoto(user.id);
+    return this.userProfileService.updateProfileImage(user.id, file);
   }
 
   @Get('dashboard')
