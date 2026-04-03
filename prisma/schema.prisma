@@ -18,6 +18,101 @@ enum VendorVerificationStatus {
   REJECTED
 }
 
+enum ListingType {
+  SALE
+  RENT
+  BOTH
+}
+
+enum VehicleListingStatus {
+  DRAFT
+  PUBLISHED
+  HIDDEN
+  ARCHIVED
+}
+
+enum VehicleAvailabilityStatus {
+  AVAILABLE
+  SOLD
+  RENTED
+  UNAVAILABLE
+}
+
+enum FuelType {
+  PETROL
+  DIESEL
+  ELECTRIC
+  HYBRID
+  GAS
+  OTHER
+}
+
+enum TransmissionType {
+  MANUAL
+  AUTOMATIC
+  CVT
+  SEMI_AUTOMATIC
+  OTHER
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+
+enum Vehicle3DJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum Vehicle3DModelStatus {
+  AVAILABLE
+  PROCESSING
+  FAILED
+  ARCHIVED
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+enum NotificationType {
+  PURCHASE_REQUEST_CREATED
+  PURCHASE_REQUEST_APPROVED
+  PURCHASE_REQUEST_REJECTED
+  RENTAL_REQUEST_CREATED
+  RENTAL_REQUEST_APPROVED
+  RENTAL_REQUEST_REJECTED
+  VEHICLE_REPORTED
+  SYSTEM_ANNOUNCEMENT
+  GENERAL
+}
+
+enum RelatedEntityType {
+  VEHICLE
+  PURCHASE_REQUEST
+  RENTAL_REQUEST
+  REVIEW
+  REPORT
+  VEHICLE_3D_JOB
+  VEHICLE_3D_MODEL
+  CHAT_SESSION
+  OTHER
+}
+
+enum ChatSenderType {
+  USER
+  BOT
+}
+
 model Account {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
@@ -31,6 +126,9 @@ model Account {
   vendor        Vendor?
   admin         Admin?
   refreshTokens RefreshToken[]
+
+  reports       Report[]       @relation("AccountReports")
+  notifications Notification[]
 }
 
 model User {
@@ -44,6 +142,12 @@ model User {
   updatedAt       DateTime @updatedAt
 
   account Account @relation(fields: [accountId], references: [id])
+
+  purchaseRequests PurchaseRequest[]
+  rentalRequests   RentalRequest[]
+  favorites        Favorite[]
+  reviews          Review[]
+  chatSessions     ChatSession[]
 }
 
 model Vendor {
@@ -59,6 +163,10 @@ model Vendor {
   updatedAt          DateTime                 @updatedAt
 
   account Account @relation(fields: [accountId], references: [id])
+
+  vehicles         Vehicle[]
+  purchaseRequests PurchaseRequest[]
+  rentalRequests   RentalRequest[]
 }
 
 model Admin {
@@ -70,6 +178,8 @@ model Admin {
   updatedAt DateTime @updatedAt
 
   account Account @relation(fields: [accountId], references: [id])
+
+  reviewedReports Report[] @relation("AdminReviewedReports")
 }
 
 model RefreshToken {
@@ -80,4 +190,245 @@ model RefreshToken {
   createdAt DateTime @default(now())
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+}
+
+model Vehicle {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  vendorId           String                    @db.Uuid
+  title              String
+  description        String?
+  brand              String
+  model              String
+  year               Int
+  color              String?
+  fuelType           FuelType?
+  transmission       TransmissionType?
+  mileage            Int?
+  price              Decimal?                  @db.Decimal(12, 2)
+  rentalPricePerDay  Decimal?                  @db.Decimal(12, 2)
+  listingType        ListingType
+  listingStatus      VehicleListingStatus      @default(DRAFT)
+  availabilityStatus VehicleAvailabilityStatus @default(AVAILABLE)
+  locationCity       String?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  vendor           Vendor            @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  images           VehicleImage[]
+  features         VehicleFeature[]
+  purchaseRequests PurchaseRequest[]
+  rentalRequests   RentalRequest[]
+  favorites        Favorite[]
+  reviews          Review[]
+  reports          Report[]
+  vehicle3DJobs    Vehicle3DJob[]
+  vehicle3DModels  Vehicle3DModel[]
+
+  @@index([vendorId])
+  @@index([brand, model])
+  @@index([year])
+  @@index([listingType])
+  @@index([listingStatus])
+  @@index([availabilityStatus])
+  @@index([locationCity])
+}
+
+model VehicleImage {
+  id         String   @id @default(uuid()) @db.Uuid
+  vehicleId  String   @db.Uuid
+  imageUrl   String
+  angleLabel String?
+  sortOrder  Int      @default(0)
+  isPrimary  Boolean  @default(false)
+  uploadedAt DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+}
+
+model VehicleFeature {
+  id        String   @id @default(uuid()) @db.Uuid
+  vehicleId String   @db.Uuid
+  name      String
+  value     String
+  createdAt DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+}
+
+model Vehicle3DJob {
+  id            String             @id @default(uuid()) @db.Uuid
+  vehicleId     String             @db.Uuid
+  providerName  String
+  externalJobId String?
+  status        Vehicle3DJobStatus @default(PENDING)
+  submittedAt   DateTime           @default(now())
+  completedAt   DateTime?
+  errorMessage  String?
+
+  vehicle Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  models  Vehicle3DModel[]
+
+  @@index([vehicleId])
+  @@index([status])
+  @@index([externalJobId])
+}
+
+model Vehicle3DModel {
+  id              String               @id @default(uuid()) @db.Uuid
+  vehicleId       String               @db.Uuid
+  jobId           String?              @db.Uuid
+  modelUrl        String
+  previewImageUrl String?
+  fileFormat      String?
+  status          Vehicle3DModelStatus @default(AVAILABLE)
+  generatedAt     DateTime             @default(now())
+
+  vehicle Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  job     Vehicle3DJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId])
+  @@index([jobId])
+}
+
+model PurchaseRequest {
+  id           String        @id @default(uuid()) @db.Uuid
+  vehicleId    String        @db.Uuid
+  userId       String        @db.Uuid
+  vendorId     String        @db.Uuid
+  offeredPrice Decimal?      @db.Decimal(12, 2)
+  message      String?
+  status       RequestStatus @default(PENDING)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vendor  Vendor  @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+  @@index([userId])
+  @@index([vendorId])
+  @@index([status])
+}
+
+model RentalRequest {
+  id         String        @id @default(uuid()) @db.Uuid
+  vehicleId  String        @db.Uuid
+  userId     String        @db.Uuid
+  vendorId   String        @db.Uuid
+  startDate  DateTime
+  endDate    DateTime
+  totalPrice Decimal?      @db.Decimal(12, 2)
+  message    String?
+  status     RequestStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vendor  Vendor  @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+  @@index([userId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([startDate, endDate])
+}
+
+model Favorite {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  vehicleId String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, vehicleId])
+  @@index([userId])
+  @@index([vehicleId])
+}
+
+model Review {
+  id        String   @id @default(uuid()) @db.Uuid
+  vehicleId String   @db.Uuid
+  userId    String   @db.Uuid
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([vehicleId, userId])
+  @@index([vehicleId])
+  @@index([userId])
+}
+
+model Report {
+  id                String       @id @default(uuid()) @db.Uuid
+  vehicleId         String       @db.Uuid
+  reporterAccountId String       @db.Uuid
+  reason            String
+  description       String?
+  status            ReportStatus @default(PENDING)
+  reviewedByAdminId String?      @db.Uuid
+  createdAt         DateTime     @default(now())
+  reviewedAt        DateTime?
+
+  vehicle         Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  reporterAccount Account @relation("AccountReports", fields: [reporterAccountId], references: [id], onDelete: Cascade)
+  reviewedByAdmin Admin?  @relation("AdminReviewedReports", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId])
+  @@index([reporterAccountId])
+  @@index([reviewedByAdminId])
+  @@index([status])
+}
+
+model Notification {
+  id                String             @id @default(uuid()) @db.Uuid
+  accountId         String             @db.Uuid
+  title             String
+  body              String
+  type              NotificationType   @default(GENERAL)
+  isRead            Boolean            @default(false)
+  relatedEntityType RelatedEntityType?
+  relatedEntityId   String?            @db.Uuid
+  createdAt         DateTime           @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([isRead])
+  @@index([type])
+}
+
+model ChatSession {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([userId])
+}
+
+model ChatMessage {
+  id         String         @id @default(uuid()) @db.Uuid
+  sessionId  String         @db.Uuid
+  senderType ChatSenderType
+  message    String
+  createdAt  DateTime       @default(now())
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
 }
