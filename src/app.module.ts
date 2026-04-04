@@ -6,6 +6,8 @@ import { AuthModule } from './features/auth/auth.module';
 import { UserProfileModule } from './features/user-profile/user-profile.module';
 import { VendorProfileModule } from './features/vendor-profile/vendor-profile.module';
 import { AdminProfileModule } from './features/admin-profile/admin-profile.module';
+import { VehiclesModule } from './features/vehicles/vehicles.module';
+import { VehicleImagesModule } from './features/vehicle-images/vehicle-images.module';
 
 @Module({
   imports: [
@@ -14,6 +16,8 @@ import { AdminProfileModule } from './features/admin-profile/admin-profile.modul
     UserProfileModule,
     VendorProfileModule,
     AdminProfileModule,
+    VehiclesModule,
+    VehicleImagesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
