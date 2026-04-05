@@ -40,7 +40,14 @@ export class CloudinaryService {
 
     return new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder, resource_type: 'image' },
+        {
+          folder,
+          resource_type: 'image',
+          transformation: [
+            { width: 1600, height: 1600, crop: 'limit' },
+            { quality: 'auto:good', fetch_format: 'auto' },
+          ],
+        },
         (err, result: UploadApiResponse | undefined) => {
           if (err) {
             reject(err);
