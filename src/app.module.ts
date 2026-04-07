@@ -8,6 +8,7 @@ import { VendorProfileModule } from './features/vendor-profile/vendor-profile.mo
 import { AdminProfileModule } from './features/admin-profile/admin-profile.module';
 import { VehiclesModule } from './features/vehicles/vehicles.module';
 import { VehicleImagesModule } from './features/vehicle-images/vehicle-images.module';
+import { FavoritesModule } from './features/favorites/favorites.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { VehicleImagesModule } from './features/vehicle-images/vehicle-images.mo
     AdminProfileModule,
     VehiclesModule,
     VehicleImagesModule,
+    FavoritesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
