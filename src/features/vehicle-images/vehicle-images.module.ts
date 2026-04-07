@@ -1,9 +1,14 @@
 import { Module } from '@nestjs/common';
-import { VehicleImagesController } from './vehicle-images.controller';
+import { CloudinaryModule } from '../../common/cloudinary/cloudinary.module';
+import {
+  VehicleImagesController,
+  VehicleImagesPrimaryController,
+} from './vehicle-images.controller';
 import { VehicleImagesService } from './vehicle-images.service';
 
 @Module({
-  controllers: [VehicleImagesController],
+  imports: [CloudinaryModule],
+  controllers: [VehicleImagesController, VehicleImagesPrimaryController],
   providers: [VehicleImagesService],
 })
 export class VehicleImagesModule {}
