@@ -8,6 +8,7 @@ import { VendorProfileModule } from './features/vendor-profile/vendor-profile.mo
 import { AdminProfileModule } from './features/admin-profile/admin-profile.module';
 import { VehiclesModule } from './features/vehicles/vehicles.module';
 import { VehicleImagesModule } from './features/vehicle-images/vehicle-images.module';
+import { FavoritesModule } from './features/favorites/favorites.module';
 import { PurchaseRequestsModule } from './features/purchase-requests/purchase-requests.module';
 
 @Module({
@@ -19,6 +20,7 @@ import { PurchaseRequestsModule } from './features/purchase-requests/purchase-re
     AdminProfileModule,
     VehiclesModule,
     VehicleImagesModule,
+    FavoritesModule,
     PurchaseRequestsModule,
   ],
   controllers: [AppController],

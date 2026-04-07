@@ -177,6 +177,27 @@ export class VehiclesService {
     });
   }
 
+  async archive(accountId: string, vehicleId: string) {
+    const vendor = await this.findVendorByAccount(accountId);
+
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found');
+    }
+
+    if (vehicle.vendorId !== vendor.id) {
+      throw new ForbiddenException('You do not own this vehicle');
+    }
+
+    return this.prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: { listingStatus: VehicleListingStatus.ARCHIVED },
+    });
+  }
+
   private async findVendorByAccount(accountId: string) {
     const vendor = await this.prisma.vendor.findUnique({
       where: { accountId },
