@@ -10,6 +10,8 @@ import { VehiclesModule } from './features/vehicles/vehicles.module';
 import { VehicleImagesModule } from './features/vehicle-images/vehicle-images.module';
 import { FavoritesModule } from './features/favorites/favorites.module';
 import { PurchaseRequestsModule } from './features/purchase-requests/purchase-requests.module';
+import { RentalRequestsModule } from './features/rental-requests/rental-requests.module';
+import { NotificationsModule } from './features/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import { PurchaseRequestsModule } from './features/purchase-requests/purchase-re
     VehicleImagesModule,
     FavoritesModule,
     PurchaseRequestsModule,
+    RentalRequestsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

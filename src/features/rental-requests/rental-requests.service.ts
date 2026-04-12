@@ -14,17 +14,17 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { CreatePurchaseRequestDto } from './dto/create-purchase-request.dto';
-import { UpdatePurchaseRequestStatusDto } from './dto/update-purchase-request-status.dto';
+import { CreateRentalRequestDto } from './dto/create-rental-request.dto';
+import { UpdateRentalRequestStatusDto } from './dto/update-rental-request-status.dto';
 
 @Injectable()
-export class PurchaseRequestsService {
+export class RentalRequestsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  async create(accountId: string, dto: CreatePurchaseRequestDto) {
+  async create(accountId: string, dto: CreateRentalRequestDto) {
     const user = await this.prisma.user.findUnique({
       where: { accountId },
     });
@@ -42,26 +42,60 @@ export class PurchaseRequestsService {
     }
 
     if (vehicle.listingStatus !== VehicleListingStatus.PUBLISHED) {
-      throw new BadRequestException('Vehicle is not available for purchase');
+      throw new BadRequestException('Vehicle is not available for rent');
     }
 
     if (
-      vehicle.listingType !== ListingType.SALE &&
+      vehicle.listingType !== ListingType.RENT &&
       vehicle.listingType !== ListingType.BOTH
     ) {
-      throw new BadRequestException('Vehicle is not listed for sale');
+      throw new BadRequestException('Vehicle is not listed for rent');
     }
 
     if (vehicle.availabilityStatus !== VehicleAvailabilityStatus.AVAILABLE) {
       throw new BadRequestException('Vehicle is not currently available');
     }
 
-    const request = await this.prisma.purchaseRequest.create({
+    if (!vehicle.rentalPricePerDay) {
+      throw new BadRequestException('Vehicle does not have a rental price');
+    }
+
+    const startDate = new Date(dto.startDate);
+    const endDate = new Date(dto.endDate);
+
+    if (startDate >= endDate) {
+      throw new BadRequestException('Start date must be before end date');
+    }
+
+    const overlap = await this.prisma.rentalRequest.findFirst({
+      where: {
+        vehicleId: dto.vehicleId,
+        status: RequestStatus.APPROVED,
+        startDate: { lt: endDate },
+        endDate: { gt: startDate },
+      },
+    });
+
+    if (overlap) {
+      throw new BadRequestException(
+        'Vehicle is already booked for the selected period',
+      );
+    }
+
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const numberOfDays = Math.ceil(
+      (endDate.getTime() - startDate.getTime()) / msPerDay,
+    );
+    const totalPrice = Number(vehicle.rentalPricePerDay) * numberOfDays;
+
+    const request = await this.prisma.rentalRequest.create({
       data: {
         vehicleId: dto.vehicleId,
         userId: user.id,
         vendorId: vehicle.vendorId,
-        offeredPrice: dto.offeredPrice ?? null,
+        startDate,
+        endDate,
+        totalPrice,
         message: dto.message ?? null,
         status: RequestStatus.PENDING,
       },
@@ -74,10 +108,10 @@ export class PurchaseRequestsService {
     if (vendor) {
       await this.notificationsService.createNotification({
         accountId: vendor.accountId,
-        title: 'New Purchase Request',
-        body: 'Someone wants to buy your vehicle',
-        type: NotificationType.PURCHASE_REQUEST_CREATED,
-        relatedEntityType: RelatedEntityType.PURCHASE_REQUEST,
+        title: 'New Rental Request',
+        body: 'A user requested to rent your vehicle',
+        type: NotificationType.RENTAL_REQUEST_CREATED,
+        relatedEntityType: RelatedEntityType.RENTAL_REQUEST,
         relatedEntityId: request.id,
       });
     }
@@ -94,7 +128,7 @@ export class PurchaseRequestsService {
       throw new NotFoundException('User profile not found');
     }
 
-    return this.prisma.purchaseRequest.findMany({
+    return this.prisma.rentalRequest.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
     });
@@ -109,7 +143,7 @@ export class PurchaseRequestsService {
       throw new NotFoundException('Vendor profile not found');
     }
 
-    return this.prisma.purchaseRequest.findMany({
+    return this.prisma.rentalRequest.findMany({
       where: { vendorId: vendor.id },
       orderBy: { createdAt: 'desc' },
     });
@@ -118,7 +152,7 @@ export class PurchaseRequestsService {
   async updateRequestStatus(
     accountId: string,
     requestId: string,
-    dto: UpdatePurchaseRequestStatusDto,
+    dto: UpdateRentalRequestStatusDto,
   ) {
     const vendor = await this.prisma.vendor.findUnique({
       where: { accountId },
@@ -128,29 +162,46 @@ export class PurchaseRequestsService {
       throw new NotFoundException('Vendor profile not found');
     }
 
-    const purchaseRequest = await this.prisma.purchaseRequest.findUnique({
+    const rentalRequest = await this.prisma.rentalRequest.findUnique({
       where: { id: requestId },
     });
 
-    if (!purchaseRequest) {
-      throw new NotFoundException('Purchase request not found');
+    if (!rentalRequest) {
+      throw new NotFoundException('Rental request not found');
     }
 
-    if (purchaseRequest.vendorId !== vendor.id) {
-      throw new ForbiddenException(
-        'You are not allowed to update this request',
-      );
+    if (rentalRequest.vendorId !== vendor.id) {
+      throw new ForbiddenException('You are not allowed to update this request');
     }
 
     const allowedStatuses: RequestStatus[] = [
       RequestStatus.APPROVED,
       RequestStatus.REJECTED,
     ];
+
     if (!allowedStatuses.includes(dto.status)) {
       throw new BadRequestException('Invalid status value');
     }
 
-    const updatedRequest = await this.prisma.purchaseRequest.update({
+    if (dto.status === RequestStatus.APPROVED) {
+      const overlap = await this.prisma.rentalRequest.findFirst({
+        where: {
+          id: { not: requestId },
+          vehicleId: rentalRequest.vehicleId,
+          status: RequestStatus.APPROVED,
+          startDate: { lt: rentalRequest.endDate },
+          endDate: { gt: rentalRequest.startDate },
+        },
+      });
+
+      if (overlap) {
+        throw new BadRequestException(
+          'Vehicle is already booked for the selected period',
+        );
+      }
+    }
+
+    const updatedRequest = await this.prisma.rentalRequest.update({
       where: { id: requestId },
       data: { status: dto.status },
     });
@@ -163,16 +214,14 @@ export class PurchaseRequestsService {
       const isApproved = dto.status === RequestStatus.APPROVED;
       await this.notificationsService.createNotification({
         accountId: user.accountId,
-        title: isApproved
-          ? 'Purchase Request Approved'
-          : 'Purchase Request Rejected',
+        title: isApproved ? 'Request Approved' : 'Request Rejected',
         body: isApproved
-          ? 'Your purchase request has been approved'
-          : 'Your purchase request has been rejected',
+          ? 'Your rental request has been approved'
+          : 'Your rental request has been rejected',
         type: isApproved
-          ? NotificationType.PURCHASE_REQUEST_APPROVED
-          : NotificationType.PURCHASE_REQUEST_REJECTED,
-        relatedEntityType: RelatedEntityType.PURCHASE_REQUEST,
+          ? NotificationType.RENTAL_REQUEST_APPROVED
+          : NotificationType.RENTAL_REQUEST_REJECTED,
+        relatedEntityType: RelatedEntityType.RENTAL_REQUEST,
         relatedEntityId: updatedRequest.id,
       });
     }
@@ -181,12 +230,12 @@ export class PurchaseRequestsService {
   }
 
   async findOne(accountId: string, requestId: string) {
-    const purchaseRequest = await this.prisma.purchaseRequest.findUnique({
+    const rentalRequest = await this.prisma.rentalRequest.findUnique({
       where: { id: requestId },
     });
 
-    if (!purchaseRequest) {
-      throw new NotFoundException('Purchase request not found');
+    if (!rentalRequest) {
+      throw new NotFoundException('Rental request not found');
     }
 
     const [user, vendor] = await Promise.all([
@@ -194,13 +243,13 @@ export class PurchaseRequestsService {
       this.prisma.vendor.findUnique({ where: { accountId } }),
     ]);
 
-    const isOwner = user !== null && purchaseRequest.userId === user.id;
-    const isVendor = vendor !== null && purchaseRequest.vendorId === vendor.id;
+    const isOwner = user !== null && rentalRequest.userId === user.id;
+    const isVendor = vendor !== null && rentalRequest.vendorId === vendor.id;
 
     if (!isOwner && !isVendor) {
       throw new ForbiddenException('You are not allowed to view this request');
     }
 
-    return purchaseRequest;
+    return rentalRequest;
   }
 }
