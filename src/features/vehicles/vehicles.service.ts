@@ -10,10 +10,19 @@ import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 import { UpdateVehicleListingStatusDto } from './dto/update-vehicle-listing-status.dto';
 import { UpdateVehicleAvailabilityDto } from './dto/update-vehicle-availability.dto';
+import { SearchService } from './search/search.service';
+import { FilterService } from './filter/filter.service';
+import { SortService } from './sort/sort.service';
+import { GetVehiclesQueryDto } from './dto/get-vehicles-query.dto';
 
 @Injectable()
 export class VehiclesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly searchService: SearchService,
+    private readonly filterService: FilterService,
+    private readonly sortService: SortService,
+  ) {}
 
   async create(accountId: string, dto: CreateVehicleDto) {
     const vendor = await this.findVendorByAccount(accountId);
@@ -42,11 +51,35 @@ export class VehiclesService {
     return vehicle;
   }
 
-  async findPublicVehicles() {
-    return this.prisma.vehicle.findMany({
-      where: { listingStatus: VehicleListingStatus.PUBLISHED },
-      orderBy: { createdAt: 'desc' },
-    });
+  async findPublicVehicles(query: GetVehiclesQueryDto) {
+    const { search, page = 1, limit = 10, ...restParams } = query;
+    
+    const skip = (page - 1) * limit;
+    const take = limit;
+
+    const filterWhere = this.filterService.buildFilterWhere(restParams);
+    const orderBy = this.sortService.buildSort(restParams);
+    const where = this.searchService.buildSearchWhere(search, filterWhere);
+
+    const [data, total] = await Promise.all([
+      this.prisma.vehicle.findMany({
+        where,
+        orderBy,
+        skip,
+        take,
+      }),
+      this.prisma.vehicle.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async findOne(vehicleId: string, user?: { id: string; role: string }) {

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -10,6 +10,7 @@ import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 import { UpdateVehicleListingStatusDto } from './dto/update-vehicle-listing-status.dto';
 import { UpdateVehicleAvailabilityDto } from './dto/update-vehicle-availability.dto';
 import { VehiclesService } from './vehicles.service';
+import { GetVehiclesQueryDto } from './dto/get-vehicles-query.dto';
 
 type JwtUser = { id: string; email: string; role: string };
 
@@ -18,8 +19,8 @@ export class VehiclesController {
   constructor(private readonly vehiclesService: VehiclesService) {}
 
   @Get()
-  findPublicVehicles() {
-    return this.vehiclesService.findPublicVehicles();
+  findPublicVehicles(@Query() query: GetVehiclesQueryDto) {
+    return this.vehiclesService.findPublicVehicles(query);
   }
 
   @Post()
