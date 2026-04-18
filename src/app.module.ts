@@ -10,8 +10,6 @@ import { VehiclesModule } from './features/vehicles/vehicles.module';
 import { VehicleImagesModule } from './features/vehicle-images/vehicle-images.module';
 import { FavoritesModule } from './features/favorites/favorites.module';
 import { PurchaseRequestsModule } from './features/purchase-requests/purchase-requests.module';
-import { ReviewsModule } from './features/reviews/reviews.module';
-import { ReportsModule } from './features/reports/reports.module';
 
 @Module({
   imports: [
@@ -24,10 +22,8 @@ import { ReportsModule } from './features/reports/reports.module';
     VehicleImagesModule,
     FavoritesModule,
     PurchaseRequestsModule,
-    ReviewsModule,
-    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
