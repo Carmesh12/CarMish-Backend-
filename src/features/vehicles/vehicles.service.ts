@@ -67,6 +67,12 @@ export class VehiclesService {
         orderBy,
         skip,
         take,
+        include: {
+          images: {
+            orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
+            take: 1,
+          },
+        },
       }),
       this.prisma.vehicle.count({ where }),
     ]);
