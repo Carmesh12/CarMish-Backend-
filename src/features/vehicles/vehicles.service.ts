@@ -53,7 +53,6 @@ export class VehiclesService {
 
   async findPublicVehicles(query: GetVehiclesQueryDto) {
     const { search, page = 1, limit = 10, ...restParams } = query;
-    
     const skip = (page - 1) * limit;
     const take = limit;
 

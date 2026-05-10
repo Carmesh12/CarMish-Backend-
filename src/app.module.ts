@@ -10,6 +10,7 @@ import { VehiclesModule } from './features/vehicles/vehicles.module';
 import { VehicleImagesModule } from './features/vehicle-images/vehicle-images.module';
 import { FavoritesModule } from './features/favorites/favorites.module';
 import { PurchaseRequestsModule } from './features/purchase-requests/purchase-requests.module';
+import { ChatModule } from './features/chat/chat.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { PurchaseRequestsModule } from './features/purchase-requests/purchase-re
     VehicleImagesModule,
     FavoritesModule,
     PurchaseRequestsModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [AppService],
