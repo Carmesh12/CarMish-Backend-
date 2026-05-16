@@ -14,6 +14,7 @@ import { SearchService } from './search/search.service';
 import { FilterService } from './filter/filter.service';
 import { SortService } from './sort/sort.service';
 import { GetVehiclesQueryDto } from './dto/get-vehicles-query.dto';
+import { Vehicle3dService } from '../vehicle-3d/vehicle-3d.service';
 
 @Injectable()
 export class VehiclesService {
@@ -22,6 +23,7 @@ export class VehiclesService {
     private readonly searchService: SearchService,
     private readonly filterService: FilterService,
     private readonly sortService: SortService,
+    private readonly vehicle3dService: Vehicle3dService,
   ) {}
 
   async create(accountId: string, dto: CreateVehicleDto) {
@@ -97,7 +99,8 @@ export class VehiclesService {
     }
 
     if (vehicle.listingStatus === VehicleListingStatus.PUBLISHED) {
-      return vehicle;
+      const threeD = await this.vehicle3dService.getListingThreeDSummary(vehicle.id);
+      return { ...vehicle, ...threeD };
     }
 
     if (!user || user.role !== Role.VENDOR) {
@@ -110,7 +113,12 @@ export class VehiclesService {
       throw new ForbiddenException('You do not own this vehicle');
     }
 
-    return vehicle;
+    const threeD = await this.vehicle3dService.getListingThreeDSummary(vehicle.id);
+    return { ...vehicle, ...threeD };
+  }
+
+  async getPublishedThreeD(vehicleId: string) {
+    return this.vehicle3dService.getPublishedVehicleModelUrl(vehicleId);
   }
 
   async findMyVehicles(accountId: string) {

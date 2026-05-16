@@ -37,6 +37,12 @@ export class VehiclesController {
     return this.vehiclesService.findMyVehicles(user.id);
   }
 
+  @Get(':id/3d')
+  @UseGuards(OptionalJwtAuthGuard)
+  getPublishedThreeD(@Param('id', ParseUUIDPipe) id: string) {
+    return this.vehiclesService.getPublishedThreeD(id);
+  }
+
   @Get(':id')
   @UseGuards(OptionalJwtAuthGuard)
   findOne(

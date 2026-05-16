@@ -11,6 +11,7 @@ import { VehicleImagesModule } from './features/vehicle-images/vehicle-images.mo
 import { FavoritesModule } from './features/favorites/favorites.module';
 import { PurchaseRequestsModule } from './features/purchase-requests/purchase-requests.module';
 import { ChatModule } from './features/chat/chat.module';
+import { Vehicle3dModule } from './features/vehicle-3d/vehicle-3d.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ChatModule } from './features/chat/chat.module';
     FavoritesModule,
     PurchaseRequestsModule,
     ChatModule,
+    Vehicle3dModule,
   ],
   controllers: [AppController],
   providers: [AppService],

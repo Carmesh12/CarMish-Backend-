@@ -148,6 +148,8 @@ model User {
   favorites        Favorite[]
   reviews          Review[]
   chatSessions     ChatSession[]
+  personalVehicle3DJobs   PersonalVehicle3DJob[]
+  personalVehicle3DModels PersonalVehicle3DModel[]
 }
 
 model Vendor {
@@ -291,6 +293,42 @@ model Vehicle3DModel {
   job     Vehicle3DJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
 
   @@index([vehicleId])
+  @@index([jobId])
+}
+
+model PersonalVehicle3DJob {
+  id            String             @id @default(uuid()) @db.Uuid
+  userId        String             @db.Uuid
+  providerName  String
+  externalJobId String?
+  status        Vehicle3DJobStatus @default(PENDING)
+  submittedAt   DateTime           @default(now())
+  completedAt   DateTime?
+  errorMessage  String?
+
+  user    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  models  PersonalVehicle3DModel[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([externalJobId])
+}
+
+model PersonalVehicle3DModel {
+  id              String               @id @default(uuid()) @db.Uuid
+  userId          String               @db.Uuid
+  jobId           String?              @db.Uuid
+  modelUrl        String
+  previewImageUrl String?
+  fileFormat      String?
+  title           String?
+  status          Vehicle3DModelStatus @default(AVAILABLE)
+  generatedAt     DateTime             @default(now())
+
+  user User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  PersonalVehicle3DJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
   @@index([jobId])
 }
 
