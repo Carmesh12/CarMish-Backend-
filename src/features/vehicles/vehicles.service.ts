@@ -16,6 +16,9 @@ import { SortService } from './sort/sort.service';
 import { GetVehiclesQueryDto } from './dto/get-vehicles-query.dto';
 import { Vehicle3dService } from '../vehicle-3d/vehicle-3d.service';
 
+type MutationUser = { id: string; role: string };
+type VehicleOwner = { vendorId: string };
+
 @Injectable()
 export class VehiclesService {
   constructor(
@@ -29,7 +32,11 @@ export class VehiclesService {
   async create(accountId: string, dto: CreateVehicleDto) {
     const vendor = await this.findVendorByAccount(accountId);
 
-    this.validatePriceForListingType(dto.listingType, dto.price, dto.rentalPricePerDay);
+    this.validatePriceForListingType(
+      dto.listingType,
+      dto.price,
+      dto.rentalPricePerDay,
+    );
 
     const vehicle = await this.prisma.vehicle.create({
       data: {
@@ -99,12 +106,16 @@ export class VehiclesService {
     }
 
     if (vehicle.listingStatus === VehicleListingStatus.PUBLISHED) {
-      const threeD = await this.vehicle3dService.getListingThreeDSummary(vehicle.id);
+      const threeD = await this.vehicle3dService.getListingThreeDSummary(
+        vehicle.id,
+      );
       return { ...vehicle, ...threeD };
     }
 
     if (!user || user.role !== Role.VENDOR) {
-      throw new ForbiddenException('You do not have permission to view this vehicle');
+      throw new ForbiddenException(
+        'You do not have permission to view this vehicle',
+      );
     }
 
     const vendor = await this.findVendorByAccount(user.id);
@@ -113,7 +124,9 @@ export class VehiclesService {
       throw new ForbiddenException('You do not own this vehicle');
     }
 
-    const threeD = await this.vehicle3dService.getListingThreeDSummary(vehicle.id);
+    const threeD = await this.vehicle3dService.getListingThreeDSummary(
+      vehicle.id,
+    );
     return { ...vehicle, ...threeD };
   }
 
@@ -130,9 +143,7 @@ export class VehiclesService {
     });
   }
 
-  async update(accountId: string, vehicleId: string, dto: UpdateVehicleDto) {
-    const vendor = await this.findVendorByAccount(accountId);
-
+  async update(user: MutationUser, vehicleId: string, dto: UpdateVehicleDto) {
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { id: vehicleId },
     });
@@ -141,15 +152,20 @@ export class VehiclesService {
       throw new NotFoundException('Vehicle not found');
     }
 
-    if (vehicle.vendorId !== vendor.id) {
-      throw new ForbiddenException('You do not own this vehicle');
-    }
+    await this.assertCanModifyVehicle(user, vehicle);
 
     const finalListingType = dto.listingType ?? vehicle.listingType;
     const finalPrice = dto.price !== undefined ? dto.price : vehicle.price;
-    const finalRentalPrice = dto.rentalPricePerDay !== undefined ? dto.rentalPricePerDay : vehicle.rentalPricePerDay;
+    const finalRentalPrice =
+      dto.rentalPricePerDay !== undefined
+        ? dto.rentalPricePerDay
+        : vehicle.rentalPricePerDay;
 
-    this.validatePriceForListingType(finalListingType, finalPrice, finalRentalPrice);
+    this.validatePriceForListingType(
+      finalListingType,
+      finalPrice,
+      finalRentalPrice,
+    );
 
     const updated = await this.prisma.vehicle.update({
       where: { id: vehicleId },
@@ -174,12 +190,10 @@ export class VehiclesService {
   }
 
   async updateListingStatus(
-    accountId: string,
+    user: MutationUser,
     vehicleId: string,
     dto: UpdateVehicleListingStatusDto,
   ) {
-    const vendor = await this.findVendorByAccount(accountId);
-
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { id: vehicleId },
     });
@@ -188,9 +202,7 @@ export class VehiclesService {
       throw new NotFoundException('Vehicle not found');
     }
 
-    if (vehicle.vendorId !== vendor.id) {
-      throw new ForbiddenException('You do not own this vehicle');
-    }
+    await this.assertCanModifyVehicle(user, vehicle);
 
     return this.prisma.vehicle.update({
       where: { id: vehicleId },
@@ -199,12 +211,10 @@ export class VehiclesService {
   }
 
   async updateAvailability(
-    accountId: string,
+    user: MutationUser,
     vehicleId: string,
     dto: UpdateVehicleAvailabilityDto,
   ) {
-    const vendor = await this.findVendorByAccount(accountId);
-
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { id: vehicleId },
     });
@@ -213,9 +223,7 @@ export class VehiclesService {
       throw new NotFoundException('Vehicle not found');
     }
 
-    if (vehicle.vendorId !== vendor.id) {
-      throw new ForbiddenException('You do not own this vehicle');
-    }
+    await this.assertCanModifyVehicle(user, vehicle);
 
     return this.prisma.vehicle.update({
       where: { id: vehicleId },
@@ -223,9 +231,7 @@ export class VehiclesService {
     });
   }
 
-  async archive(accountId: string, vehicleId: string) {
-    const vendor = await this.findVendorByAccount(accountId);
-
+  async archive(user: MutationUser, vehicleId: string) {
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { id: vehicleId },
     });
@@ -234,9 +240,7 @@ export class VehiclesService {
       throw new NotFoundException('Vehicle not found');
     }
 
-    if (vehicle.vendorId !== vendor.id) {
-      throw new ForbiddenException('You do not own this vehicle');
-    }
+    await this.assertCanModifyVehicle(user, vehicle);
 
     return this.prisma.vehicle.update({
       where: { id: vehicleId },
@@ -254,6 +258,27 @@ export class VehiclesService {
     }
 
     return vendor;
+  }
+
+  private async assertCanModifyVehicle(
+    user: MutationUser,
+    vehicle: VehicleOwner,
+  ) {
+    if (user.role === Role.ADMIN) {
+      return;
+    }
+
+    if (user.role !== Role.VENDOR) {
+      throw new ForbiddenException(
+        'You do not have permission to modify this vehicle',
+      );
+    }
+
+    const vendor = await this.findVendorByAccount(user.id);
+
+    if (vehicle.vendorId !== vendor.id) {
+      throw new ForbiddenException('You do not own this vehicle');
+    }
   }
 
   private validatePriceForListingType(

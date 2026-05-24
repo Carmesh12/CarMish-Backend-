@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -15,11 +16,107 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateChatSessionDto } from './dto/create-chat-session.dto';
 import { SendChatMessageDto } from './dto/send-chat-message.dto';
 
+type VehicleFilters = {
+  listingType: 'SALE' | 'RENT' | 'BOTH' | null;
+  brand: string | null;
+  model: string | null;
+  maxPrice: number | null;
+  minPrice: number | null;
+  city: string | null;
+  minYear: number | null;
+  maxYear: number | null;
+};
+
+type ExtractVehicleFiltersResult = {
+  filters: VehicleFilters;
+  fallback: boolean;
+};
+
+const EMPTY_VEHICLE_FILTERS: VehicleFilters = {
+  listingType: null,
+  brand: null,
+  model: null,
+  maxPrice: null,
+  minPrice: null,
+  city: null,
+  minYear: null,
+  maxYear: null,
+};
+
+const AI_PARSE_FALLBACK_MESSAGE =
+  'I could not fully understand the AI response, but you can try rephrasing your request.';
+
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
-  private async extractVehicleFilters(message: string) {
+  private normalizeVehicleFilters(value: unknown): VehicleFilters {
+    const source =
+      value && typeof value === 'object'
+        ? (value as Record<string, unknown>)
+        : {};
+
+    const stringOrNull = (key: string) => {
+      const raw = source[key];
+      return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+    };
+
+    const numberOrNull = (key: string) => {
+      const raw = source[key];
+      return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
+    };
+
+    const rawListingType = source.listingType;
+    const listingType =
+      rawListingType === 'SALE' ||
+      rawListingType === 'RENT' ||
+      rawListingType === 'BOTH'
+        ? rawListingType
+        : null;
+
+    return {
+      listingType,
+      brand: stringOrNull('brand'),
+      model: stringOrNull('model'),
+      maxPrice: numberOrNull('maxPrice'),
+      minPrice: numberOrNull('minPrice'),
+      city: stringOrNull('city'),
+      minYear: numberOrNull('minYear'),
+      maxYear: numberOrNull('maxYear'),
+    };
+  }
+
+  private parseGeminiFilters(text: string): ExtractVehicleFiltersResult {
+    const cleanedText = text
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```$/i, '')
+      .trim();
+
+    try {
+      return {
+        filters: this.normalizeVehicleFilters(JSON.parse(cleanedText)),
+        fallback: false,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Failed to parse Gemini vehicle filters JSON: ${
+          error instanceof Error ? error.message : 'Unknown parse error'
+        }`,
+      );
+
+      return {
+        filters: { ...EMPTY_VEHICLE_FILTERS },
+        fallback: true,
+      };
+    }
+  }
+
+  private async extractVehicleFilters(
+    message: string,
+  ): Promise<ExtractVehicleFiltersResult> {
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
@@ -64,37 +161,13 @@ export class ChatService {
 
     const text = result.response.text();
 
-    const cleanedText = text
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/```$/i, '')
-      .trim();
-
-    return JSON.parse(cleanedText) as {
-      listingType: 'SALE' | 'RENT' | 'BOTH' | null;
-      brand: string | null;
-      model: string | null;
-      maxPrice: number | null;
-      minPrice: number | null;
-      city: string | null;
-      minYear: number | null;
-      maxYear: number | null;
-    };
+    return this.parseGeminiFilters(text);
   }
 
   private buildAssistantReply(
     recommendations: any[],
     userMessage: string,
-    filters: {
-      listingType: 'SALE' | 'RENT' | 'BOTH' | null;
-      brand: string | null;
-      model: string | null;
-      maxPrice: number | null;
-      minPrice: number | null;
-      city: string | null;
-      minYear: number | null;
-      maxYear: number | null;
-    },
+    filters: VehicleFilters,
   ) {
     const count = recommendations.length;
 
@@ -267,7 +340,27 @@ export class ChatService {
       },
     });
 
-    const filters = await this.extractVehicleFilters(dto.message);
+    const { filters, fallback } = await this.extractVehicleFilters(dto.message);
+
+    if (fallback) {
+      const assistantMessage = await this.prisma.chatMessage.create({
+        data: {
+          sessionId,
+          senderType: ChatSenderType.BOT,
+          message: AI_PARSE_FALLBACK_MESSAGE,
+        },
+      });
+
+      return {
+        userMessage: createdMessage,
+        assistantMessage,
+        reply: AI_PARSE_FALLBACK_MESSAGE,
+        message: AI_PARSE_FALLBACK_MESSAGE,
+        filters,
+        recommendations: [],
+        fallback: true,
+      };
+    }
 
     const hasMeaningfulCriteria =
       filters.listingType != null ||

@@ -22,7 +22,7 @@ type JwtUser = { id: string; email: string; role: string };
 
 @Controller('vendors/me/vehicles')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.VENDOR)
+@Roles(Role.VENDOR, Role.ADMIN)
 export class VendorVehicle3dController {
   constructor(private readonly vehicle3dService: Vehicle3dService) {}
 
@@ -51,7 +51,7 @@ export class VendorVehicle3dController {
       model?: Express.Multer.File[];
     },
   ) {
-    return this.vehicle3dService.createVendorListingJob(user.id, vehicleId, files);
+    return this.vehicle3dService.createVendorListingJob(user, vehicleId, files);
   }
 
   @Get(':vehicleId/3d-jobs/:jobId')
@@ -60,6 +60,6 @@ export class VendorVehicle3dController {
     @Param('vehicleId', ParseUUIDPipe) vehicleId: string,
     @Param('jobId', ParseUUIDPipe) jobId: string,
   ) {
-    return this.vehicle3dService.getVendorListingJob(user.id, vehicleId, jobId);
+    return this.vehicle3dService.getVendorListingJob(user, vehicleId, jobId);
   }
 }

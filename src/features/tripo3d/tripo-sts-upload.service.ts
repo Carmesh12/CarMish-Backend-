@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3 } from '@aws-sdk/client-s3';
 import { TripoHttpService } from './tripo-http.service';
 
 export type TripoS3Object = { bucket: string; key: string };
@@ -38,7 +38,7 @@ export class TripoStsUploadService {
       format,
     });
 
-    const client = new S3Client({
+    const client = new S3({
       region: 'us-west-2',
       endpoint: `https://${data.s3_host}`,
       credentials: {
@@ -49,14 +49,12 @@ export class TripoStsUploadService {
       forcePathStyle: true,
     });
 
-    await client.send(
-      new PutObjectCommand({
-        Bucket: data.resource_bucket,
-        Key: data.resource_uri,
-        Body: buffer,
-        ContentType: mimetype,
-      }),
-    );
+    await client.putObject({
+      Bucket: data.resource_bucket,
+      Key: data.resource_uri,
+      Body: buffer,
+      ContentType: mimetype,
+    });
 
     return { bucket: data.resource_bucket, key: data.resource_uri };
   }

@@ -7,6 +7,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
+  Role,
   Vehicle3DJobStatus,
   Vehicle3DModelStatus,
   VehicleListingStatus,
@@ -30,6 +31,8 @@ export type JobUploadFiles = {
   right?: Express.Multer.File[];
   model?: Express.Multer.File[];
 };
+
+type MutationUser = { id: string; role: string };
 
 @Injectable()
 export class Vehicle3dService {
@@ -62,12 +65,43 @@ export class Vehicle3dService {
     return user;
   }
 
+  private async findVehicleForListingMutation(
+    user: MutationUser,
+    vehicleId: string,
+  ) {
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found');
+    }
+
+    if (user.role === Role.ADMIN) {
+      return vehicle;
+    }
+
+    if (user.role !== Role.VENDOR) {
+      throw new ForbiddenException(
+        'You do not have permission to manage vehicle 3D models',
+      );
+    }
+
+    const vendor = await this.findVendorByAccount(user.id);
+
+    if (vehicle.vendorId !== vendor.id) {
+      throw new ForbiddenException('You do not own this vehicle');
+    }
+
+    return vehicle;
+  }
+
   private hasMultiviewImages(files: JobUploadFiles): boolean {
     return Boolean(
       files.front?.length ||
-        files.left?.length ||
-        files.back?.length ||
-        files.right?.length,
+      files.left?.length ||
+      files.back?.length ||
+      files.right?.length,
     );
   }
 
@@ -77,7 +111,9 @@ export class Vehicle3dService {
     const back = files.back?.[0];
     const right = files.right?.[0];
     if (!front || !left || !back || !right) {
-      throw new BadRequestException('Missing one or more views: front, left, back, right');
+      throw new BadRequestException(
+        'Missing one or more views: front, left, back, right',
+      );
     }
     return [
       { buffer: front.buffer, mimetype: front.mimetype },
@@ -98,28 +134,50 @@ export class Vehicle3dService {
 
   private assertTripoReady() {
     if (!this.tripoHttp.isConfigured()) {
-      throw new ServiceUnavailableException('3D generation is not configured (Tripo)');
+      throw new ServiceUnavailableException(
+        '3D generation is not configured (Tripo)',
+      );
     }
   }
 
-  private async resolveModelUrl(stored: string | null | undefined): Promise<string | null> {
+  private async resolveModelUrl(
+    stored: string | null | undefined,
+  ): Promise<string | null> {
     if (!stored) return null;
     return this.storage.resolveReadableModelUrl(stored);
   }
 
+  getGenerationConfig() {
+    const mockMode = isThreeDMockMode();
+    const storageReady = this.storage.isReady();
+    const tripoReady = this.tripoHttp.isConfigured();
+    const configured = mockMode ? storageReady : storageReady && tripoReady;
+
+    return {
+      mockMode,
+      mode: mockMode ? 'demo' : 'real',
+      requiresModelUpload: mockMode,
+      requiresFourImages: !mockMode,
+      configured,
+      message: configured
+        ? null
+        : mockMode
+          ? (this.storage.getNotReadyReason() ??
+            '3D demo mode requires Supabase storage configuration.')
+          : !storageReady
+            ? (this.storage.getNotReadyReason() ??
+              '3D storage is not configured.')
+            : '3D generation is not configured (Tripo).',
+    };
+  }
+
   async createVendorListingJob(
-    accountId: string,
+    user: MutationUser,
     vehicleId: string,
     files: JobUploadFiles,
   ) {
     this.assertStorageReady();
-    const vendor = await this.findVendorByAccount(accountId);
-    const vehicle = await this.prisma.vehicle.findFirst({
-      where: { id: vehicleId, vendorId: vendor.id },
-    });
-    if (!vehicle) {
-      throw new NotFoundException('Vehicle not found');
-    }
+    await this.findVehicleForListingMutation(user, vehicleId);
 
     if (isThreeDMockMode()) {
       if (this.hasMultiviewImages(files)) {
@@ -129,7 +187,9 @@ export class Vehicle3dService {
       }
       const modelFile = files.model?.[0];
       if (!modelFile) {
-        throw new BadRequestException('Upload a GLB file in the "model" field (mock mode)');
+        throw new BadRequestException(
+          'Upload a GLB file in the "model" field (mock mode)',
+        );
       }
 
       const job = await this.prisma.vehicle3DJob.create({
@@ -173,13 +233,15 @@ export class Vehicle3dService {
     });
 
     setImmediate(() => {
-      void this.runVendorListingPipeline(job.id, vehicleId, slots).catch((err: unknown) => {
-        const details = extractErrorDetails(err);
-        this.logger.error(
-          `Vendor 3D pipeline failed job=${job.id}: ${details.message}`,
-          details.stack,
-        );
-      });
+      void this.runVendorListingPipeline(job.id, vehicleId, slots).catch(
+        (err: unknown) => {
+          const details = extractErrorDetails(err);
+          this.logger.error(
+            `Vendor 3D pipeline failed job=${job.id}: ${details.message}`,
+            details.stack,
+          );
+        },
+      );
     });
 
     return { jobId: job.id };
@@ -190,14 +252,18 @@ export class Vehicle3dService {
     vehicleId: string,
     modelFile: Express.Multer.File,
   ) {
-    this.logger.log(`[MOCK] Vendor 3D pipeline start job=${jobId} vehicle=${vehicleId}`);
+    this.logger.log(
+      `[MOCK] Vendor 3D pipeline start job=${jobId} vehicle=${vehicleId}`,
+    );
     try {
       await this.prisma.vehicle3DJob.update({
         where: { id: jobId },
         data: { status: Vehicle3DJobStatus.PROCESSING },
       });
 
-      this.logger.log(`[MOCK] Uploading GLB job=${jobId} bytes=${modelFile.buffer.length}`);
+      this.logger.log(
+        `[MOCK] Uploading GLB job=${jobId} bytes=${modelFile.buffer.length}`,
+      );
       const modelUrl = await this.storage.uploadGlbBuffer(modelFile.buffer, {
         context: `vendor-vehicle=${vehicleId} job=${jobId}`,
       });
@@ -246,7 +312,9 @@ export class Vehicle3dService {
     vehicleId: string,
     slots: MultiviewSlot[],
   ) {
-    this.logger.log(`Vendor 3D pipeline start job=${jobId} vehicle=${vehicleId}`);
+    this.logger.log(
+      `Vendor 3D pipeline start job=${jobId} vehicle=${vehicleId}`,
+    );
     try {
       await this.prisma.vehicle3DJob.update({
         where: { id: jobId },
@@ -305,10 +373,14 @@ export class Vehicle3dService {
     }
   }
 
-  async getVendorListingJob(accountId: string, vehicleId: string, jobId: string) {
-    const vendor = await this.findVendorByAccount(accountId);
+  async getVendorListingJob(
+    user: MutationUser,
+    vehicleId: string,
+    jobId: string,
+  ) {
+    const vehicle = await this.findVehicleForListingMutation(user, vehicleId);
     const job = await this.prisma.vehicle3DJob.findFirst({
-      where: { id: jobId, vehicleId, vehicle: { vendorId: vendor.id } },
+      where: { id: jobId, vehicleId: vehicle.id },
     });
     if (!job) {
       throw new NotFoundException('Job not found');
@@ -324,12 +396,17 @@ export class Vehicle3dService {
     return {
       id: job.id,
       status: job.status,
-      errorMessage: job.status === Vehicle3DJobStatus.FAILED ? job.errorMessage : null,
+      errorMessage:
+        job.status === Vehicle3DJobStatus.FAILED ? job.errorMessage : null,
       modelUrl: await this.resolveModelUrl(model?.modelUrl),
     };
   }
 
-  async createPersonalJob(accountId: string, files: JobUploadFiles, title?: string) {
+  async createPersonalJob(
+    accountId: string,
+    files: JobUploadFiles,
+    title?: string,
+  ) {
     this.assertStorageReady();
     const user = await this.findUserByAccount(accountId);
 
@@ -341,7 +418,9 @@ export class Vehicle3dService {
       }
       const modelFile = files.model?.[0];
       if (!modelFile) {
-        throw new BadRequestException('Upload a GLB file in the "model" field (mock mode)');
+        throw new BadRequestException(
+          'Upload a GLB file in the "model" field (mock mode)',
+        );
       }
 
       const job = await this.prisma.personalVehicle3DJob.create({
@@ -353,15 +432,18 @@ export class Vehicle3dService {
       });
 
       setImmediate(() => {
-        void this.runPersonalMockPipeline(job.id, user.id, modelFile, title).catch(
-          (err: unknown) => {
-            const details = extractErrorDetails(err);
-            this.logger.error(
-              `Personal mock 3D pipeline failed job=${job.id}: ${details.message}`,
-              details.stack,
-            );
-          },
-        );
+        void this.runPersonalMockPipeline(
+          job.id,
+          user.id,
+          modelFile,
+          title,
+        ).catch((err: unknown) => {
+          const details = extractErrorDetails(err);
+          this.logger.error(
+            `Personal mock 3D pipeline failed job=${job.id}: ${details.message}`,
+            details.stack,
+          );
+        });
       });
 
       return { jobId: job.id };
@@ -385,13 +467,15 @@ export class Vehicle3dService {
     });
 
     setImmediate(() => {
-      void this.runPersonalPipeline(job.id, user.id, slots, title).catch((err: unknown) => {
-        const details = extractErrorDetails(err);
-        this.logger.error(
-          `Personal 3D pipeline failed job=${job.id}: ${details.message}`,
-          details.stack,
-        );
-      });
+      void this.runPersonalPipeline(job.id, user.id, slots, title).catch(
+        (err: unknown) => {
+          const details = extractErrorDetails(err);
+          this.logger.error(
+            `Personal 3D pipeline failed job=${job.id}: ${details.message}`,
+            details.stack,
+          );
+        },
+      );
     });
 
     return { jobId: job.id };
@@ -403,14 +487,18 @@ export class Vehicle3dService {
     modelFile: Express.Multer.File,
     title?: string,
   ) {
-    this.logger.log(`[MOCK] Personal 3D pipeline start job=${jobId} user=${userId}`);
+    this.logger.log(
+      `[MOCK] Personal 3D pipeline start job=${jobId} user=${userId}`,
+    );
     try {
       await this.prisma.personalVehicle3DJob.update({
         where: { id: jobId },
         data: { status: Vehicle3DJobStatus.PROCESSING },
       });
 
-      this.logger.log(`[MOCK] Uploading GLB job=${jobId} bytes=${modelFile.buffer.length}`);
+      this.logger.log(
+        `[MOCK] Uploading GLB job=${jobId} bytes=${modelFile.buffer.length}`,
+      );
       const modelUrl = await this.storage.uploadGlbBuffer(modelFile.buffer, {
         context: `personal-user=${userId} job=${jobId}`,
       });
@@ -540,7 +628,8 @@ export class Vehicle3dService {
     return {
       id: job.id,
       status: job.status,
-      errorMessage: job.status === Vehicle3DJobStatus.FAILED ? job.errorMessage : null,
+      errorMessage:
+        job.status === Vehicle3DJobStatus.FAILED ? job.errorMessage : null,
       modelUrl: await this.resolveModelUrl(model?.modelUrl),
     };
   }
@@ -596,6 +685,8 @@ export class Vehicle3dService {
     if (!model) {
       throw new NotFoundException('No 3D model available for this listing');
     }
-    return { modelUrl: (await this.resolveModelUrl(model.modelUrl)) ?? model.modelUrl };
+    return {
+      modelUrl: (await this.resolveModelUrl(model.modelUrl)) ?? model.modelUrl,
+    };
   }
 }

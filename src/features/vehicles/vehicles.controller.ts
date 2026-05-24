@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -54,45 +65,41 @@ export class VehiclesController {
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.VENDOR)
+  @Roles(Role.VENDOR, Role.ADMIN)
   update(
     @CurrentUser() user: JwtUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateVehicleDto,
   ) {
-    return this.vehiclesService.update(user.id, id, dto);
+    return this.vehiclesService.update(user, id, dto);
   }
 
   @Patch(':id/listing-status')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.VENDOR)
+  @Roles(Role.VENDOR, Role.ADMIN)
   updateListingStatus(
     @CurrentUser() user: JwtUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateVehicleListingStatusDto,
   ) {
-    return this.vehiclesService.updateListingStatus(user.id, id, dto);
+    return this.vehiclesService.updateListingStatus(user, id, dto);
   }
 
   @Patch(':id/availability')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.VENDOR)
+  @Roles(Role.VENDOR, Role.ADMIN)
   updateAvailability(
     @CurrentUser() user: JwtUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateVehicleAvailabilityDto,
   ) {
-    return this.vehiclesService.updateAvailability(user.id, id, dto);
+    return this.vehiclesService.updateAvailability(user, id, dto);
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.VENDOR)
-  remove(
-    @CurrentUser() user: JwtUser,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.vehiclesService.archive(user.id, id);
+  @Roles(Role.VENDOR, Role.ADMIN)
+  remove(@CurrentUser() user: JwtUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.vehiclesService.archive(user, id);
   }
 }
-

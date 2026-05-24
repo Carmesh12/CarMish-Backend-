@@ -130,6 +130,7 @@ export class RentalRequestsService {
 
     return this.prisma.rentalRequest.findMany({
       where: { userId: user.id },
+      include: { vehicle: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -145,6 +146,7 @@ export class RentalRequestsService {
 
     return this.prisma.rentalRequest.findMany({
       where: { vendorId: vendor.id },
+      include: { vehicle: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -162,18 +164,6 @@ export class RentalRequestsService {
       throw new NotFoundException('Vendor profile not found');
     }
 
-    const rentalRequest = await this.prisma.rentalRequest.findUnique({
-      where: { id: requestId },
-    });
-
-    if (!rentalRequest) {
-      throw new NotFoundException('Rental request not found');
-    }
-
-    if (rentalRequest.vendorId !== vendor.id) {
-      throw new ForbiddenException('You are not allowed to update this request');
-    }
-
     const allowedStatuses: RequestStatus[] = [
       RequestStatus.APPROVED,
       RequestStatus.REJECTED,
@@ -183,27 +173,71 @@ export class RentalRequestsService {
       throw new BadRequestException('Invalid status value');
     }
 
-    if (dto.status === RequestStatus.APPROVED) {
-      const overlap = await this.prisma.rentalRequest.findFirst({
-        where: {
-          id: { not: requestId },
-          vehicleId: rentalRequest.vehicleId,
-          status: RequestStatus.APPROVED,
-          startDate: { lt: rentalRequest.endDate },
-          endDate: { gt: rentalRequest.startDate },
-        },
+    const updatedRequest = await this.prisma.$transaction(async (tx) => {
+      const rentalRequest = await tx.rentalRequest.findUnique({
+        where: { id: requestId },
+        include: { vehicle: true },
       });
 
-      if (overlap) {
-        throw new BadRequestException(
-          'Vehicle is already booked for the selected period',
+      if (!rentalRequest) {
+        throw new NotFoundException('Rental request not found');
+      }
+
+      if (rentalRequest.vehicle.vendorId !== vendor.id) {
+        throw new ForbiddenException(
+          'You are not allowed to update this request',
         );
       }
-    }
 
-    const updatedRequest = await this.prisma.rentalRequest.update({
-      where: { id: requestId },
-      data: { status: dto.status },
+      if (dto.status === RequestStatus.APPROVED) {
+        if (
+          rentalRequest.vehicle.availabilityStatus !==
+          VehicleAvailabilityStatus.AVAILABLE
+        ) {
+          throw new BadRequestException('Vehicle is not currently available');
+        }
+
+        const [approvedPurchaseRequest, approvedRentalRequest] =
+          await Promise.all([
+            tx.purchaseRequest.findFirst({
+              where: {
+                vehicleId: rentalRequest.vehicleId,
+                status: RequestStatus.APPROVED,
+              },
+            }),
+            tx.rentalRequest.findFirst({
+              where: {
+                id: { not: requestId },
+                vehicleId: rentalRequest.vehicleId,
+                status: RequestStatus.APPROVED,
+              },
+            }),
+          ]);
+
+        if (approvedPurchaseRequest || approvedRentalRequest) {
+          throw new BadRequestException(
+            'Vehicle already has an approved request',
+          );
+        }
+
+        const vehicleUpdate = await tx.vehicle.updateMany({
+          where: {
+            id: rentalRequest.vehicleId,
+            availabilityStatus: VehicleAvailabilityStatus.AVAILABLE,
+          },
+          data: { availabilityStatus: VehicleAvailabilityStatus.RENTED },
+        });
+
+        if (vehicleUpdate.count !== 1) {
+          throw new BadRequestException('Vehicle is not currently available');
+        }
+      }
+
+      return tx.rentalRequest.update({
+        where: { id: requestId },
+        data: { status: dto.status },
+        include: { vehicle: true },
+      });
     });
 
     const user = await this.prisma.user.findUnique({
@@ -232,6 +266,7 @@ export class RentalRequestsService {
   async findOne(accountId: string, requestId: string) {
     const rentalRequest = await this.prisma.rentalRequest.findUnique({
       where: { id: requestId },
+      include: { vehicle: true },
     });
 
     if (!rentalRequest) {

@@ -96,6 +96,7 @@ export class PurchaseRequestsService {
 
     return this.prisma.purchaseRequest.findMany({
       where: { userId: user.id },
+      include: { vehicle: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -111,6 +112,7 @@ export class PurchaseRequestsService {
 
     return this.prisma.purchaseRequest.findMany({
       where: { vendorId: vendor.id },
+      include: { vehicle: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -128,20 +130,6 @@ export class PurchaseRequestsService {
       throw new NotFoundException('Vendor profile not found');
     }
 
-    const purchaseRequest = await this.prisma.purchaseRequest.findUnique({
-      where: { id: requestId },
-    });
-
-    if (!purchaseRequest) {
-      throw new NotFoundException('Purchase request not found');
-    }
-
-    if (purchaseRequest.vendorId !== vendor.id) {
-      throw new ForbiddenException(
-        'You are not allowed to update this request',
-      );
-    }
-
     const allowedStatuses: RequestStatus[] = [
       RequestStatus.APPROVED,
       RequestStatus.REJECTED,
@@ -150,9 +138,71 @@ export class PurchaseRequestsService {
       throw new BadRequestException('Invalid status value');
     }
 
-    const updatedRequest = await this.prisma.purchaseRequest.update({
-      where: { id: requestId },
-      data: { status: dto.status },
+    const updatedRequest = await this.prisma.$transaction(async (tx) => {
+      const purchaseRequest = await tx.purchaseRequest.findUnique({
+        where: { id: requestId },
+        include: { vehicle: true },
+      });
+
+      if (!purchaseRequest) {
+        throw new NotFoundException('Purchase request not found');
+      }
+
+      if (purchaseRequest.vehicle.vendorId !== vendor.id) {
+        throw new ForbiddenException(
+          'You are not allowed to update this request',
+        );
+      }
+
+      if (dto.status === RequestStatus.APPROVED) {
+        if (
+          purchaseRequest.vehicle.availabilityStatus !==
+          VehicleAvailabilityStatus.AVAILABLE
+        ) {
+          throw new BadRequestException('Vehicle is not currently available');
+        }
+
+        const [approvedPurchaseRequest, approvedRentalRequest] =
+          await Promise.all([
+            tx.purchaseRequest.findFirst({
+              where: {
+                id: { not: requestId },
+                vehicleId: purchaseRequest.vehicleId,
+                status: RequestStatus.APPROVED,
+              },
+            }),
+            tx.rentalRequest.findFirst({
+              where: {
+                vehicleId: purchaseRequest.vehicleId,
+                status: RequestStatus.APPROVED,
+              },
+            }),
+          ]);
+
+        if (approvedPurchaseRequest || approvedRentalRequest) {
+          throw new BadRequestException(
+            'Vehicle already has an approved request',
+          );
+        }
+
+        const vehicleUpdate = await tx.vehicle.updateMany({
+          where: {
+            id: purchaseRequest.vehicleId,
+            availabilityStatus: VehicleAvailabilityStatus.AVAILABLE,
+          },
+          data: { availabilityStatus: VehicleAvailabilityStatus.SOLD },
+        });
+
+        if (vehicleUpdate.count !== 1) {
+          throw new BadRequestException('Vehicle is not currently available');
+        }
+      }
+
+      return tx.purchaseRequest.update({
+        where: { id: requestId },
+        data: { status: dto.status },
+        include: { vehicle: true },
+      });
     });
 
     const user = await this.prisma.user.findUnique({
@@ -183,6 +233,7 @@ export class PurchaseRequestsService {
   async findOne(accountId: string, requestId: string) {
     const purchaseRequest = await this.prisma.purchaseRequest.findUnique({
       where: { id: requestId },
+      include: { vehicle: true },
     });
 
     if (!purchaseRequest) {

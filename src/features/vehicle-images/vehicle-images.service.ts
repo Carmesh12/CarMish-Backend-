@@ -1,10 +1,15 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { CloudinaryService } from '../../common/cloudinary/cloudinary.service';
 import { PrismaService } from '../../prisma/prisma.service';
+
+type MutationUser = { id: string; role: string };
+type VehicleOwner = { vendorId: string };
 
 @Injectable()
 export class VehicleImagesService {
@@ -33,6 +38,7 @@ export class VehicleImagesService {
   }
 
   async uploadVehicleImages(
+    user: MutationUser,
     vehicleId: string,
     files: Express.Multer.File[],
   ) {
@@ -43,6 +49,8 @@ export class VehicleImagesService {
     if (!vehicle) {
       throw new NotFoundException('Vehicle not found');
     }
+
+    await this.assertCanModifyVehicle(user, vehicle);
 
     if (!files.length) {
       throw new BadRequestException('At least one image is required');
@@ -77,14 +85,21 @@ export class VehicleImagesService {
     );
   }
 
-  async setPrimaryImage(imageId: string) {
+  async setPrimaryImage(user: MutationUser, imageId: string) {
     const image = await this.prisma.vehicleImage.findUnique({
       where: { id: imageId },
+      include: {
+        vehicle: {
+          select: { vendorId: true },
+        },
+      },
     });
 
     if (!image) {
       throw new NotFoundException('Image not found');
     }
+
+    await this.assertCanModifyVehicle(user, image.vehicle);
 
     const { vehicleId } = image;
 
@@ -101,14 +116,21 @@ export class VehicleImagesService {
     });
   }
 
-  async deleteImage(imageId: string) {
+  async deleteImage(user: MutationUser, imageId: string) {
     const image = await this.prisma.vehicleImage.findUnique({
       where: { id: imageId },
+      include: {
+        vehicle: {
+          select: { vendorId: true },
+        },
+      },
     });
 
     if (!image) {
       throw new NotFoundException('Image not found');
     }
+
+    await this.assertCanModifyVehicle(user, image.vehicle);
 
     const { vehicleId, isPrimary } = image;
 
@@ -133,7 +155,11 @@ export class VehicleImagesService {
     return { message: 'Image deleted successfully' };
   }
 
-  async reorderVehicleImages(vehicleId: string, imageIds: string[]) {
+  async reorderVehicleImages(
+    user: MutationUser,
+    vehicleId: string,
+    imageIds: string[],
+  ) {
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { id: vehicleId },
     });
@@ -141,6 +167,8 @@ export class VehicleImagesService {
     if (!vehicle) {
       throw new NotFoundException('Vehicle not found');
     }
+
+    await this.assertCanModifyVehicle(user, vehicle);
 
     const images = await this.prisma.vehicleImage.findMany({
       where: { vehicleId },
@@ -180,5 +208,32 @@ export class VehicleImagesService {
       where: { vehicleId },
       orderBy: { sortOrder: 'asc' },
     });
+  }
+
+  private async assertCanModifyVehicle(
+    user: MutationUser,
+    vehicle: VehicleOwner,
+  ) {
+    if (user.role === Role.ADMIN) {
+      return;
+    }
+
+    if (user.role !== Role.VENDOR) {
+      throw new ForbiddenException(
+        'You do not have permission to modify this vehicle',
+      );
+    }
+
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { accountId: user.id },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor profile not found');
+    }
+
+    if (vehicle.vendorId !== vendor.id) {
+      throw new ForbiddenException('You do not own this vehicle');
+    }
   }
 }

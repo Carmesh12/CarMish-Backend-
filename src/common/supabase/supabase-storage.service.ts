@@ -3,7 +3,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, S3 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   extractAwsS3ErrorMessage,
@@ -16,7 +16,7 @@ export class SupabaseStorageService {
   private readonly logger = new Logger(SupabaseStorageService.name);
   private readonly ready: boolean;
   private readonly notReadyReason: string | null;
-  private readonly client: S3Client | null;
+  private readonly client: S3 | null;
   private readonly bucket: string;
   private readonly folder: string;
   private readonly publicBaseUrl: string;
@@ -58,7 +58,7 @@ export class SupabaseStorageService {
 
     if (this.ready && endpoint && accessKeyId && secretAccessKey && supabaseUrl) {
       this.publicBaseUrl = `${supabaseUrl}/storage/v1/object/public/${this.bucket}`;
-      this.client = new S3Client({
+      this.client = new S3({
         region,
         endpoint,
         forcePathStyle: true,
@@ -102,15 +102,13 @@ export class SupabaseStorageService {
     );
 
     try {
-      await this.client.send(
-        new PutObjectCommand({
-          Bucket: this.bucket,
-          Key: objectKey,
-          Body: buffer,
-          ContentType: 'model/gltf-binary',
-          CacheControl: 'public, max-age=31536000, immutable',
-        }),
-      );
+      await this.client.putObject({
+        Bucket: this.bucket,
+        Key: objectKey,
+        Body: buffer,
+        ContentType: 'model/gltf-binary',
+        CacheControl: 'public, max-age=31536000, immutable',
+      });
     } catch (err: unknown) {
       const msg = extractAwsS3ErrorMessage(err);
       this.logger.error(`Supabase GLB upload failed: ${msg}`);

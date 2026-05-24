@@ -10,6 +10,9 @@ import { VehiclesModule } from './features/vehicles/vehicles.module';
 import { VehicleImagesModule } from './features/vehicle-images/vehicle-images.module';
 import { FavoritesModule } from './features/favorites/favorites.module';
 import { PurchaseRequestsModule } from './features/purchase-requests/purchase-requests.module';
+import { RentalRequestsModule } from './features/rental-requests/rental-requests.module';
+import { ReviewsModule } from './features/reviews/reviews.module';
+import { ReportsModule } from './features/reports/reports.module';
 import { ChatModule } from './features/chat/chat.module';
 import { Vehicle3dModule } from './features/vehicle-3d/vehicle-3d.module';
 
@@ -24,10 +27,13 @@ import { Vehicle3dModule } from './features/vehicle-3d/vehicle-3d.module';
     VehicleImagesModule,
     FavoritesModule,
     PurchaseRequestsModule,
+    RentalRequestsModule,
+    ReviewsModule,
+    ReportsModule,
     ChatModule,
     Vehicle3dModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}

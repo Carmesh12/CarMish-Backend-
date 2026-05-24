@@ -8,8 +8,9 @@ import {
 } from 'class-validator';
 
 export class SignupVendorDto {
-  @IsEmail()
+  @IsEmail({}, { message: 'Please enter a valid email address' })
   @IsNotEmpty()
+  @IsString()
   email!: string;
 
   @IsString()

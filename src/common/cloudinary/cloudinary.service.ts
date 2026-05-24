@@ -28,7 +28,7 @@ export class CloudinaryService {
     return this.ready;
   }
 
-  async uploadImageBuffer(buffer: Buffer): Promise<string> {
+  async uploadImageBuffer(buffer: Buffer, folderOverride?: string): Promise<string> {
     if (!this.ready) {
       throw new InternalServerErrorException(
         'Image upload is not configured',
@@ -36,7 +36,9 @@ export class CloudinaryService {
     }
 
     const folder =
-      process.env.CLOUDINARY_PROFILE_FOLDER ?? 'carmesh/user-profiles';
+      folderOverride ??
+      process.env.CLOUDINARY_PROFILE_FOLDER ??
+      'carmesh/user-profiles';
 
     return new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(

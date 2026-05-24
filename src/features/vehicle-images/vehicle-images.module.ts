@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { CloudinaryModule } from '../../common/cloudinary/cloudinary.module';
+import { AuthModule } from '../auth/auth.module';
 import {
   VehicleImagesController,
   VehicleImagesPrimaryController,
@@ -7,7 +8,7 @@ import {
 import { VehicleImagesService } from './vehicle-images.service';
 
 @Module({
-  imports: [CloudinaryModule],
+  imports: [AuthModule, CloudinaryModule],
   controllers: [VehicleImagesController, VehicleImagesPrimaryController],
   providers: [VehicleImagesService],
 })

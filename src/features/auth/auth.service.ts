@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -16,6 +16,10 @@ import { PasswordResetPayload } from './interfaces/password-reset-payload.interf
 const REFRESH_TOKEN_EXPIRY_DAYS = 7;
 const BCRYPT_SALT_ROUNDS = 10;
 const PASSWORD_RESET_TOKEN_TYPE = 'password_reset';
+const EMAIL_VERIFICATION_TOKEN_BYTES = 32;
+const DEFAULT_EMAIL_VERIFICATION_TOKEN_EXPIRY_HOURS = 24;
+const VERIFICATION_EMAIL_SENT_MESSAGE =
+  'If your email is registered and unverified, we sent a verification link.';
 
 @Injectable()
 export class AuthService {
@@ -52,6 +56,12 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (!account.emailVerified) {
+      throw new UnauthorizedException(
+        'Please verify your email before logging in.',
+      );
+    }
+
     const accessToken = this.generateAccessToken(
       account.id,
       account.email,
@@ -78,7 +88,9 @@ export class AuthService {
       throw new ConflictException('Email already registered');
     }
 
+    const mailConfig = this.getEmailVerificationMailConfig();
     const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
+    const verification = this.createEmailVerificationToken();
 
     const account = await this.prisma.$transaction(async (tx) => {
       return tx.account.create({
@@ -86,6 +98,9 @@ export class AuthService {
           email: normalizedEmail,
           passwordHash,
           role: Role.USER,
+          emailVerified: false,
+          emailVerificationTokenHash: verification.tokenHash,
+          emailVerificationTokenExpiresAt: verification.expiresAt,
           user: {
             create: {
               firstName: firstName.trim(),
@@ -102,14 +117,15 @@ export class AuthService {
       });
     });
 
-    const accessToken = this.generateAccessToken(
-      account.id,
+    await this.sendEmailVerificationEmail(
       account.email,
-      account.role,
+      verification.token,
+      mailConfig,
     );
-    const refreshToken = await this.createRefreshToken(account.id);
 
-    return this.toAuthResponse(account, accessToken, refreshToken);
+    return {
+      message: 'Account created. Please check your email to verify your account.',
+    };
   }
 
   async signupVendor(
@@ -129,7 +145,9 @@ export class AuthService {
       throw new ConflictException('Email already registered');
     }
 
+    const mailConfig = this.getEmailVerificationMailConfig();
     const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
+    const verification = this.createEmailVerificationToken();
 
     const account = await this.prisma.$transaction(async (tx) => {
       return tx.account.create({
@@ -137,6 +155,9 @@ export class AuthService {
           email: normalizedEmail,
           passwordHash,
           role: Role.VENDOR,
+          emailVerified: false,
+          emailVerificationTokenHash: verification.tokenHash,
+          emailVerificationTokenExpiresAt: verification.expiresAt,
           vendor: {
             create: {
               businessName: businessName.trim(),
@@ -154,14 +175,90 @@ export class AuthService {
       });
     });
 
-    const accessToken = this.generateAccessToken(
-      account.id,
+    await this.sendEmailVerificationEmail(
       account.email,
-      account.role,
+      verification.token,
+      mailConfig,
     );
-    const refreshToken = await this.createRefreshToken(account.id);
 
-    return this.toAuthResponse(account, accessToken, refreshToken);
+    return {
+      message: 'Account created. Please check your email to verify your account.',
+    };
+  }
+
+  async verifyEmail(token: string) {
+    if (!token) {
+      throw new BadRequestException('Verification token is required');
+    }
+
+    const tokenHash = this.hashToken(token);
+    const account = await this.prisma.account.findUnique({
+      where: { emailVerificationTokenHash: tokenHash },
+    });
+
+    if (
+      !account ||
+      !account.emailVerificationTokenExpiresAt ||
+      account.emailVerificationTokenExpiresAt < new Date()
+    ) {
+      if (account) {
+        await this.prisma.account.update({
+          where: { id: account.id },
+          data: {
+            emailVerificationTokenHash: null,
+            emailVerificationTokenExpiresAt: null,
+          },
+        });
+      }
+
+      throw new UnauthorizedException('Invalid or expired verification token');
+    }
+
+    await this.prisma.account.update({
+      where: { id: account.id },
+      data: {
+        emailVerified: true,
+        emailVerificationTokenHash: null,
+        emailVerificationTokenExpiresAt: null,
+      },
+    });
+
+    return { message: 'Email verified successfully. You can now log in.' };
+  }
+
+  async resendVerificationEmail(email: string) {
+    const normalizedEmail = (email ?? '').trim().toLowerCase();
+
+    const account = await this.prisma.account.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (!account || !account.isActive) {
+      return { message: VERIFICATION_EMAIL_SENT_MESSAGE };
+    }
+
+    if (account.emailVerified) {
+      return { message: 'Email is already verified.' };
+    }
+
+    const mailConfig = this.getEmailVerificationMailConfig();
+    const verification = this.createEmailVerificationToken();
+
+    await this.prisma.account.update({
+      where: { id: account.id },
+      data: {
+        emailVerificationTokenHash: verification.tokenHash,
+        emailVerificationTokenExpiresAt: verification.expiresAt,
+      },
+    });
+
+    await this.sendEmailVerificationEmail(
+      account.email,
+      verification.token,
+      mailConfig,
+    );
+
+    return { message: VERIFICATION_EMAIL_SENT_MESSAGE };
   }
 
   async refreshTokens(refreshToken: string) {
@@ -181,6 +278,13 @@ export class AuthService {
 
     if (!stored.account.isActive) {
       throw new UnauthorizedException('Account is deactivated');
+    }
+
+    if (!stored.account.emailVerified) {
+      await this.prisma.refreshToken.delete({ where: { id: stored.id } });
+      throw new UnauthorizedException(
+        'Please verify your email before logging in.',
+      );
     }
 
     await this.prisma.refreshToken.delete({ where: { id: stored.id } });
@@ -293,6 +397,7 @@ export class AuthService {
       id: account.id,
       email: account.email,
       role: account.role,
+      emailVerified: account.emailVerified,
       profile: this.extractProfile(account),
     };
   }
@@ -318,6 +423,7 @@ export class AuthService {
       id: string;
       email: string;
       role: Role;
+      emailVerified: boolean;
       user?: ({ accountId: string } & Record<string, unknown>) | null;
       vendor?: ({ accountId: string } & Record<string, unknown>) | null;
       admin?: ({ accountId: string } & Record<string, unknown>) | null;
@@ -332,9 +438,32 @@ export class AuthService {
         id: account.id,
         email: account.email,
         role: account.role,
+        emailVerified: account.emailVerified,
         profile: this.extractProfile(account),
       },
     };
+  }
+
+  private createEmailVerificationToken(): {
+    token: string;
+    tokenHash: string;
+    expiresAt: Date;
+  } {
+    const token = randomBytes(EMAIL_VERIFICATION_TOKEN_BYTES).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setHours(
+      expiresAt.getHours() + this.getEmailVerificationExpiryHours(),
+    );
+
+    return {
+      token,
+      tokenHash: this.hashToken(token),
+      expiresAt,
+    };
+  }
+
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 
   private extractProfile(account: {
@@ -399,6 +528,44 @@ export class AuthService {
     });
   }
 
+  private async sendEmailVerificationEmail(
+    toEmail: string,
+    token: string,
+    mailConfig: {
+      smtpHost: string;
+      smtpPort: number;
+      smtpUser: string;
+      smtpPass: string;
+      mailFrom: string;
+      verificationBaseUrl: string;
+    },
+  ) {
+    const verificationUrl = `${mailConfig.verificationBaseUrl}?token=${encodeURIComponent(token)}`;
+    const secure = mailConfig.smtpPort === 465;
+    const transporter = nodemailer.createTransport({
+      host: mailConfig.smtpHost,
+      port: mailConfig.smtpPort,
+      secure,
+      auth: {
+        user: mailConfig.smtpUser,
+        pass: mailConfig.smtpPass,
+      },
+    });
+
+    await transporter.sendMail({
+      from: mailConfig.mailFrom,
+      to: toEmail,
+      subject: 'Verify your CarMesh email',
+      text: `Welcome to CarMesh. Verify your email address using this link: ${verificationUrl}`,
+      html: `
+        <p>Welcome to CarMesh.</p>
+        <p>Click the link below to verify your email address:</p>
+        <p><a href="${verificationUrl}">Verify your email</a></p>
+        <p>If you did not create this account, you can safely ignore this email.</p>
+      `,
+    });
+  }
+
   private getPasswordResetMailConfig() {
     const smtpHost = process.env.SMTP_HOST;
     const smtpPortRaw = process.env.SMTP_PORT;
@@ -434,5 +601,58 @@ export class AuthService {
       resetBaseUrl,
       tokenExpiresIn,
     };
+  }
+
+  private getEmailVerificationMailConfig() {
+    const smtpHost = process.env.SMTP_HOST;
+    const smtpPortRaw = process.env.SMTP_PORT;
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+    const mailFrom = process.env.MAIL_FROM;
+    const verificationBaseUrl =
+      process.env.EMAIL_VERIFICATION_BASE_URL ||
+      `${process.env.FRONTEND_URL ?? 'http://localhost:5173'}/verify-email`;
+
+    const smtpPort = smtpPortRaw ? Number(smtpPortRaw) : NaN;
+
+    if (
+      !smtpHost ||
+      !smtpPortRaw ||
+      Number.isNaN(smtpPort) ||
+      smtpPort <= 0 ||
+      !smtpUser ||
+      !smtpPass ||
+      !mailFrom ||
+      !verificationBaseUrl
+    ) {
+      throw new InternalServerErrorException(
+        'Email verification service is not configured correctly',
+      );
+    }
+
+    return {
+      smtpHost,
+      smtpPort,
+      smtpUser,
+      smtpPass,
+      mailFrom,
+      verificationBaseUrl,
+    };
+  }
+
+  private getEmailVerificationExpiryHours(): number {
+    const raw = process.env.EMAIL_VERIFICATION_TOKEN_EXPIRES_HOURS;
+    if (!raw) {
+      return DEFAULT_EMAIL_VERIFICATION_TOKEN_EXPIRY_HOURS;
+    }
+
+    const hours = Number(raw);
+    if (!Number.isFinite(hours) || hours <= 0) {
+      throw new InternalServerErrorException(
+        'EMAIL_VERIFICATION_TOKEN_EXPIRES_HOURS must be a positive number',
+      );
+    }
+
+    return hours;
   }
 }

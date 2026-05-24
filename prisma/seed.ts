@@ -22,6 +22,7 @@ async function main() {
       email: 'admin@carmesh.com',
       passwordHash,
       role: Role.ADMIN,
+      emailVerified: true,
       admin: {
         create: {
           firstName: 'Super',
@@ -39,6 +40,7 @@ async function main() {
       email: 'vendor@carmesh.com',
       passwordHash,
       role: Role.VENDOR,
+      emailVerified: true,
       vendor: {
         create: {
           businessName: 'Premium Motors',
@@ -57,6 +59,7 @@ async function main() {
       email: 'user1@carmesh.com',
       passwordHash,
       role: Role.USER,
+      emailVerified: true,
       user: {
         create: {
           firstName: 'Ali',
@@ -74,6 +77,7 @@ async function main() {
       email: 'user2@carmesh.com',
       passwordHash,
       role: Role.USER,
+      emailVerified: true,
       user: {
         create: {
           firstName: 'Sara',
