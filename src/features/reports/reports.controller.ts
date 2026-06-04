@@ -25,8 +25,60 @@ export class ReportsController {
   @Get('admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  findAllForAdmin(@Query() query: GetReportsDto) {
-    return this.reportsService.findAllForAdmin(query.page, query.limit);
+  findAllForAdmin(
+    @Query() query: GetReportsDto,
+    @Query('status') status?: string,
+    @Query('vehicleId') vehicleId?: string,
+  ) {
+    return this.reportsService.findAllForAdmin(query.page, query.limit, status, vehicleId);
+  }
+
+  @Get('admin/grouped')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  findGroupedForAdmin(@Query('status') status?: string) {
+    return this.reportsService.findGroupedForAdmin(status);
+  }
+
+  @Patch('vehicle/:vehicleId/resolve-all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  resolveAll(
+    @CurrentUser() admin: JwtUser,
+    @Param('vehicleId', ParseUUIDPipe) vehicleId: string,
+  ) {
+    return this.reportsService.resolveAllForVehicle(admin.id, vehicleId);
+  }
+
+  @Patch('vehicle/:vehicleId/dismiss-all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  dismissAll(
+    @CurrentUser() admin: JwtUser,
+    @Param('vehicleId', ParseUUIDPipe) vehicleId: string,
+  ) {
+    return this.reportsService.dismissAllForVehicle(admin.id, vehicleId);
+  }
+
+  @Patch('vehicle/:vehicleId/hide')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  hideVehicle(
+    @CurrentUser() admin: JwtUser,
+    @Param('vehicleId', ParseUUIDPipe) vehicleId: string,
+  ) {
+    return this.reportsService.hideVehicleListing(admin.id, vehicleId);
+  }
+
+  @Post('vehicle/:vehicleId/discuss')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  discussWithVendor(
+    @CurrentUser() admin: JwtUser,
+    @Param('vehicleId', ParseUUIDPipe) vehicleId: string,
+    @Body() body: { subject: string; body: string },
+  ) {
+    return this.reportsService.discussWithVendor(admin.id, vehicleId, body.subject, body.body);
   }
 
   @Patch(':id/status')

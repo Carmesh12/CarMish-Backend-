@@ -92,6 +92,12 @@ enum NotificationType {
   RENTAL_REQUEST_APPROVED
   RENTAL_REQUEST_REJECTED
   VEHICLE_REPORTED
+  VENDOR_APPROVED
+  VENDOR_REJECTED
+  ADMIN_MESSAGE_RECEIVED
+  VENDOR_MESSAGE_RECEIVED
+  ACCOUNT_DEACTIVATED
+  ACCOUNT_ACTIVATED
   SYSTEM_ANNOUNCEMENT
   GENERAL
 }
@@ -113,6 +119,11 @@ enum ChatSenderType {
   BOT
 }
 
+enum ThreadContext {
+  VENDOR_VERIFICATION
+  REPORT_DISCUSSION
+}
+
 model Account {
   id                              String    @id @default(uuid()) @db.Uuid
   email                           String    @unique
@@ -132,6 +143,10 @@ model Account {
 
   reports       Report[]       @relation("AccountReports")
   notifications Notification[]
+
+  adminThreads   AdminVendorThread[]   @relation("AdminThreads")
+  vendorThreads  AdminVendorThread[]   @relation("VendorThreads")
+  sentMessages   AdminVendorMessage[]  @relation("SentMessages")
 }
 
 model User {
@@ -472,4 +487,40 @@ model ChatMessage {
   session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
+}
+
+model AdminVendorThread {
+  id              String        @id @default(uuid()) @db.Uuid
+  adminAccountId  String        @db.Uuid
+  vendorAccountId String        @db.Uuid
+  subject         String
+  context         ThreadContext
+  contextEntityId String?       @db.Uuid
+  isClosed        Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  adminAccount  Account              @relation("AdminThreads", fields: [adminAccountId], references: [id])
+  vendorAccount Account              @relation("VendorThreads", fields: [vendorAccountId], references: [id])
+  messages      AdminVendorMessage[]
+
+  @@index([adminAccountId])
+  @@index([vendorAccountId])
+  @@index([context])
+  @@index([isClosed])
+}
+
+model AdminVendorMessage {
+  id              String   @id @default(uuid()) @db.Uuid
+  threadId        String   @db.Uuid
+  senderAccountId String   @db.Uuid
+  body            String
+  isRead          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  thread        AdminVendorThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderAccount Account           @relation("SentMessages", fields: [senderAccountId], references: [id])
+
+  @@index([threadId])
+  @@index([senderAccountId])
 }
