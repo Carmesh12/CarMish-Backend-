@@ -20,6 +20,7 @@ import { Vehicle3dModule } from './features/vehicle-3d/vehicle-3d.module';
 import { AdminVendorsModule } from './features/admin-vendors/admin-vendors.module';
 import { AdminAccountsModule } from './features/admin-accounts/admin-accounts.module';
 import { AdminMessagingModule } from './features/admin-messaging/admin-messaging.module';
+import { ConversationsModule } from './features/conversations/conversations.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { AdminMessagingModule } from './features/admin-messaging/admin-messaging
     AdminVendorsModule,
     AdminAccountsModule,
     AdminMessagingModule,
+    ConversationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

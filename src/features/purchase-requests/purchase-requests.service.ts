@@ -96,7 +96,10 @@ export class PurchaseRequestsService {
 
     return this.prisma.purchaseRequest.findMany({
       where: { userId: user.id },
-      include: { vehicle: true },
+      include: {
+        vehicle: true,
+        vendor: { select: { accountId: true, businessName: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -112,7 +115,10 @@ export class PurchaseRequestsService {
 
     return this.prisma.purchaseRequest.findMany({
       where: { vendorId: vendor.id },
-      include: { vehicle: true },
+      include: {
+        vehicle: true,
+        user: { select: { accountId: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

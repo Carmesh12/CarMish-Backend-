@@ -130,7 +130,10 @@ export class RentalRequestsService {
 
     return this.prisma.rentalRequest.findMany({
       where: { userId: user.id },
-      include: { vehicle: true },
+      include: {
+        vehicle: true,
+        vendor: { select: { accountId: true, businessName: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -146,7 +149,10 @@ export class RentalRequestsService {
 
     return this.prisma.rentalRequest.findMany({
       where: { vendorId: vendor.id },
-      include: { vehicle: true },
+      include: {
+        vehicle: true,
+        user: { select: { accountId: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

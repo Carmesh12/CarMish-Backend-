@@ -99,6 +99,16 @@ export class VehiclesService {
   async findOne(vehicleId: string, user?: { id: string; role: string }) {
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { id: vehicleId },
+      include: {
+        vendor: {
+          select: {
+            accountId: true,
+            businessName: true,
+            contactPersonName: true,
+            logoUrl: true,
+          },
+        },
+      },
     });
 
     if (!vehicle) {

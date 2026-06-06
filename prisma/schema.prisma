@@ -98,7 +98,15 @@ enum NotificationType {
   VENDOR_MESSAGE_RECEIVED
   ACCOUNT_DEACTIVATED
   ACCOUNT_ACTIVATED
+  CONVERSATION_NEW
+  CONVERSATION_MESSAGE_RECEIVED
   SYSTEM_ANNOUNCEMENT
+  GENERAL
+}
+
+enum ConversationContext {
+  PURCHASE_REQUEST
+  RENTAL_REQUEST
   GENERAL
 }
 
@@ -147,6 +155,10 @@ model Account {
   adminThreads   AdminVendorThread[]   @relation("AdminThreads")
   vendorThreads  AdminVendorThread[]   @relation("VendorThreads")
   sentMessages   AdminVendorMessage[]  @relation("SentMessages")
+
+  userConversations         Conversation[]        @relation("UserConversations")
+  vendorConversations       Conversation[]        @relation("VendorConversations")
+  conversationSentMessages  ConversationMessage[] @relation("ConversationSentMessages")
 }
 
 model User {
@@ -243,6 +255,7 @@ model Vehicle {
   reports          Report[]
   vehicle3DJobs    Vehicle3DJob[]
   vehicle3DModels  Vehicle3DModel[]
+  conversations    Conversation[]
 
   @@index([vendorId])
   @@index([brand, model])
@@ -522,5 +535,43 @@ model AdminVendorMessage {
   senderAccount Account           @relation("SentMessages", fields: [senderAccountId], references: [id])
 
   @@index([threadId])
+  @@index([senderAccountId])
+}
+
+model Conversation {
+  id              String              @id @default(uuid()) @db.Uuid
+  userAccountId   String              @db.Uuid
+  vendorAccountId String              @db.Uuid
+  context         ConversationContext
+  contextEntityId String?             @db.Uuid
+  vehicleId       String?             @db.Uuid
+  isClosed        Boolean             @default(false)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  userAccount   Account               @relation("UserConversations", fields: [userAccountId], references: [id])
+  vendorAccount Account               @relation("VendorConversations", fields: [vendorAccountId], references: [id])
+  vehicle       Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  messages      ConversationMessage[]
+
+  @@index([userAccountId])
+  @@index([vendorAccountId])
+  @@index([context])
+  @@index([contextEntityId])
+  @@index([vehicleId])
+}
+
+model ConversationMessage {
+  id              String   @id @default(uuid()) @db.Uuid
+  conversationId  String   @db.Uuid
+  senderAccountId String   @db.Uuid
+  body            String
+  isRead          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  conversation  Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderAccount Account      @relation("ConversationSentMessages", fields: [senderAccountId], references: [id])
+
+  @@index([conversationId])
   @@index([senderAccountId])
 }
