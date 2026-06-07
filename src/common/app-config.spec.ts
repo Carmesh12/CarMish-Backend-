@@ -29,6 +29,16 @@ describe('app config smoke checks', () => {
     expect(getCorsOrigin()).toBe('https://cors.example.test');
   });
 
+  it('supports comma-separated CORS origins with surrounding whitespace', () => {
+    process.env.CORS_ORIGIN =
+      ' http://localhost:5173, http://192.168.1.20:5173 ';
+
+    expect(getCorsOrigin()).toEqual([
+      'http://localhost:5173',
+      'http://192.168.1.20:5173',
+    ]);
+  });
+
   it('fails clearly when JWT_SECRET is missing in production', () => {
     process.env.NODE_ENV = 'production';
 
