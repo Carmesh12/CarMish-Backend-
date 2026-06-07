@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -30,7 +40,12 @@ export class ReportsController {
     @Query('status') status?: string,
     @Query('vehicleId') vehicleId?: string,
   ) {
-    return this.reportsService.findAllForAdmin(query.page, query.limit, status, vehicleId);
+    return this.reportsService.findAllForAdmin(
+      query.page,
+      query.limit,
+      status,
+      vehicleId,
+    );
   }
 
   @Get('admin/grouped')
@@ -78,7 +93,12 @@ export class ReportsController {
     @Param('vehicleId', ParseUUIDPipe) vehicleId: string,
     @Body() body: { subject: string; body: string },
   ) {
-    return this.reportsService.discussWithVendor(admin.id, vehicleId, body.subject, body.body);
+    return this.reportsService.discussWithVendor(
+      admin.id,
+      vehicleId,
+      body.subject,
+      body.body,
+    );
   }
 
   @Patch(':id/status')

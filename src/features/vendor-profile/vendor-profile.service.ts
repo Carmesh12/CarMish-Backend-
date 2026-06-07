@@ -66,6 +66,65 @@ export class VendorProfileService {
     return this.toProfileResponse(account);
   }
 
+  async getPublicProfile(accountId: string) {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        vendor: {
+          select: {
+            id: true,
+            businessName: true,
+            contactPersonName: true,
+            phoneNumber: true,
+            businessAddress: true,
+            logoUrl: true,
+            verificationStatus: true,
+            createdAt: true,
+            vehicles: {
+              where: { listingStatus: VehicleListingStatus.PUBLISHED },
+              orderBy: { createdAt: 'desc' },
+              include: {
+                images: {
+                  orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
+                  take: 1,
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (
+      !account ||
+      account.role !== Role.VENDOR ||
+      !account.isActive ||
+      !account.vendor
+    ) {
+      throw new NotFoundException('Vendor profile not found');
+    }
+
+    const { vendor } = account;
+    return {
+      accountId: account.id,
+      email: account.email,
+      businessName: vendor.businessName,
+      contactPersonName: vendor.contactPersonName,
+      phoneNumber: vendor.phoneNumber,
+      businessAddress: vendor.businessAddress,
+      logoUrl: vendor.logoUrl,
+      verificationStatus: vendor.verificationStatus,
+      memberSince: account.createdAt,
+      profileCreatedAt: vendor.createdAt,
+      vehicles: vendor.vehicles,
+    };
+  }
+
   async updateProfile(accountId: string, dto: UpdateVendorProfileDto) {
     const account = await this.loadVendorAccount(accountId);
     const vendorId = account.vendor!.id;
@@ -112,7 +171,9 @@ export class VendorProfileService {
 
   async changePassword(accountId: string, dto: ChangeVendorPasswordDto) {
     if (dto.newPassword !== dto.confirmNewPassword) {
-      throw new BadRequestException('New password and confirmation do not match');
+      throw new BadRequestException(
+        'New password and confirmation do not match',
+      );
     }
 
     const account = await this.prisma.account.findUnique({
@@ -287,7 +348,8 @@ export class VendorProfileService {
 
     try {
       const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
-        model: process.env.GEMINI_VENDOR_ANALYTICS_MODEL ?? 'gemini-flash-latest',
+        model:
+          process.env.GEMINI_VENDOR_ANALYTICS_MODEL ?? 'gemini-flash-latest',
       });
       const result = await model.generateContent(
         this.buildAnalyticsChatPrompt({
@@ -419,7 +481,8 @@ export class VendorProfileService {
 
     return {
       kpis: {
-        estimatedRevenue: Math.round((purchaseRevenue + rentalRevenue) * 100) / 100,
+        estimatedRevenue:
+          Math.round((purchaseRevenue + rentalRevenue) * 100) / 100,
         purchaseRevenue: Math.round(purchaseRevenue * 100) / 100,
         rentalRevenue: Math.round(rentalRevenue * 100) / 100,
         activeListings: publishedVehicles.length,
@@ -466,7 +529,11 @@ export class VendorProfileService {
         rental: this.countStatuses(rentalRequests),
       },
       trends: this.buildRequestTrend(range, purchaseRequests, rentalRequests),
-      topVehicles: this.buildTopVehicles(vehicles, purchaseRequests, rentalRequests),
+      topVehicles: this.buildTopVehicles(
+        vehicles,
+        purchaseRequests,
+        rentalRequests,
+      ),
       underperformingVehicles: this.buildUnderperformingVehicles(
         publishedVehicles,
         purchaseRequests,
@@ -494,12 +561,15 @@ export class VendorProfileService {
   }
 
   private async generateAiInsights(context: {
-    vendor: { businessName: string; verificationStatus: VendorVerificationStatus };
+    vendor: {
+      businessName: string;
+      verificationStatus: VendorVerificationStatus;
+    };
     range: VendorDashboardRange;
     profileCompletion: unknown;
     analytics: { insights: VendorAiInsight[] } & Record<string, unknown>;
   }): Promise<VendorAiInsight[]> {
-    const fallbackInsights = context.analytics.insights as VendorAiInsight[];
+    const fallbackInsights = context.analytics.insights;
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
@@ -508,7 +578,8 @@ export class VendorProfileService {
 
     try {
       const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
-        model: process.env.GEMINI_VENDOR_ANALYTICS_MODEL ?? 'gemini-flash-latest',
+        model:
+          process.env.GEMINI_VENDOR_ANALYTICS_MODEL ?? 'gemini-flash-latest',
       });
       const result = await model.generateContent(
         this.buildInsightsPrompt(context),
@@ -527,7 +598,10 @@ export class VendorProfileService {
   }
 
   private buildInsightsPrompt(context: {
-    vendor: { businessName: string; verificationStatus: VendorVerificationStatus };
+    vendor: {
+      businessName: string;
+      verificationStatus: VendorVerificationStatus;
+    };
     range: VendorDashboardRange;
     profileCompletion: unknown;
     analytics: Record<string, unknown>;
@@ -570,11 +644,7 @@ export class VendorProfileService {
           const message = source.message;
           const action = source.action;
 
-          if (
-            type !== 'success' &&
-            type !== 'warning' &&
-            type !== 'info'
-          ) {
+          if (type !== 'success' && type !== 'warning' && type !== 'info') {
             return null;
           }
           if (typeof title !== 'string' || typeof message !== 'string') {
@@ -615,7 +685,10 @@ export class VendorProfileService {
 
   private buildAnalyticsChatPrompt(context: {
     question: string;
-    vendor: { businessName: string; verificationStatus: VendorVerificationStatus };
+    vendor: {
+      businessName: string;
+      verificationStatus: VendorVerificationStatus;
+    };
     range: VendorDashboardRange;
     profileCompletion: unknown;
     analytics: Record<string, unknown>;
@@ -672,11 +745,21 @@ export class VendorProfileService {
   private countStatuses(requests: { status: RequestStatus }[]) {
     return {
       total: requests.length,
-      pending: requests.filter((request) => request.status === RequestStatus.PENDING).length,
-      approved: requests.filter((request) => request.status === RequestStatus.APPROVED).length,
-      rejected: requests.filter((request) => request.status === RequestStatus.REJECTED).length,
-      cancelled: requests.filter((request) => request.status === RequestStatus.CANCELLED).length,
-      completed: requests.filter((request) => request.status === RequestStatus.COMPLETED).length,
+      pending: requests.filter(
+        (request) => request.status === RequestStatus.PENDING,
+      ).length,
+      approved: requests.filter(
+        (request) => request.status === RequestStatus.APPROVED,
+      ).length,
+      rejected: requests.filter(
+        (request) => request.status === RequestStatus.REJECTED,
+      ).length,
+      cancelled: requests.filter(
+        (request) => request.status === RequestStatus.CANCELLED,
+      ).length,
+      completed: requests.filter(
+        (request) => request.status === RequestStatus.COMPLETED,
+      ).length,
     };
   }
 
@@ -723,7 +806,10 @@ export class VendorProfileService {
         label:
           range === 'week' || range === 'month'
             ? date.toLocaleDateString('en', { month: 'short', day: 'numeric' })
-            : date.toLocaleDateString('en', { month: 'short', year: '2-digit' }),
+            : date.toLocaleDateString('en', {
+                month: 'short',
+                year: '2-digit',
+              }),
         purchase: 0,
         rental: 0,
         total: 0,
@@ -752,8 +838,16 @@ export class VendorProfileService {
         reviews: number;
       };
     }[],
-    purchaseRequests: { vehicleId: string; status: RequestStatus; offeredPrice: unknown }[],
-    rentalRequests: { vehicleId: string; status: RequestStatus; totalPrice: unknown }[],
+    purchaseRequests: {
+      vehicleId: string;
+      status: RequestStatus;
+      offeredPrice: unknown;
+    }[],
+    rentalRequests: {
+      vehicleId: string;
+      status: RequestStatus;
+      totalPrice: unknown;
+    }[],
   ) {
     return vehicles
       .map((vehicle) => {
@@ -780,8 +874,9 @@ export class VendorProfileService {
           favorites: vehicle._count.favorites,
           reviews: vehicle._count.reviews,
           estimatedRevenue:
-            Math.round((approvedPurchaseRevenue + approvedRentalRevenue) * 100) /
-            100,
+            Math.round(
+              (approvedPurchaseRevenue + approvedRentalRevenue) * 100,
+            ) / 100,
           score:
             periodRequests * 3 +
             vehicle._count.favorites * 2 +
@@ -858,7 +953,8 @@ export class VendorProfileService {
         type: 'warning',
         title: 'Low engagement listings',
         message: `${input.underperformingCount} published vehicles have no requests or favorites in this period.`,
-        action: 'Refresh photos, pricing, title, and description for these listings.',
+        action:
+          'Refresh photos, pricing, title, and description for these listings.',
         source: 'fallback',
       });
     }
@@ -867,7 +963,8 @@ export class VendorProfileService {
         type: 'success',
         title: 'Best performer',
         message: `${input.topVehicleTitle} is your strongest listing right now.`,
-        action: 'Use similar photos, pricing, and descriptions on similar vehicles.',
+        action:
+          'Use similar photos, pricing, and descriptions on similar vehicles.',
         source: 'fallback',
       });
     }
@@ -876,7 +973,8 @@ export class VendorProfileService {
         type: 'info',
         title: 'No published listings',
         message: 'Publish your first vehicle to start receiving requests.',
-        action: 'Add vehicle photos, set a clear price, and publish the listing.',
+        action:
+          'Add vehicle photos, set a clear price, and publish the listing.',
         source: 'fallback',
       });
     }
@@ -884,8 +982,10 @@ export class VendorProfileService {
       insights.push({
         type: 'success',
         title: 'Strong reputation',
-        message: 'Your average rating is excellent. Keep highlighting reviewed vehicles.',
-        action: 'Feature highly reviewed listings and ask satisfied customers for reviews.',
+        message:
+          'Your average rating is excellent. Keep highlighting reviewed vehicles.',
+        action:
+          'Feature highly reviewed listings and ask satisfied customers for reviews.',
         source: 'fallback',
       });
     }
@@ -893,7 +993,9 @@ export class VendorProfileService {
     return insights.slice(0, 5);
   }
 
-  private async loadVendorAccount(accountId: string): Promise<AccountVendorRow> {
+  private async loadVendorAccount(
+    accountId: string,
+  ): Promise<AccountVendorRow> {
     const account = await this.prisma.account.findUnique({
       where: { id: accountId },
       select: {

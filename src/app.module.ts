@@ -21,6 +21,7 @@ import { AdminVendorsModule } from './features/admin-vendors/admin-vendors.modul
 import { AdminAccountsModule } from './features/admin-accounts/admin-accounts.module';
 import { AdminMessagingModule } from './features/admin-messaging/admin-messaging.module';
 import { ConversationsModule } from './features/conversations/conversations.module';
+import { ThreeDPrintRequestsModule } from './features/three-d-print-requests/three-d-print-requests.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { ConversationsModule } from './features/conversations/conversations.modu
     AdminAccountsModule,
     AdminMessagingModule,
     ConversationsModule,
+    ThreeDPrintRequestsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -6,7 +6,15 @@ import { TripoMultiviewPipelineService } from './tripo-multiview-pipeline.servic
 
 @Module({
   imports: [SupabaseStorageModule],
-  providers: [TripoHttpService, TripoStsUploadService, TripoMultiviewPipelineService],
-  exports: [TripoHttpService, TripoStsUploadService, TripoMultiviewPipelineService],
+  providers: [
+    TripoHttpService,
+    TripoStsUploadService,
+    TripoMultiviewPipelineService,
+  ],
+  exports: [
+    TripoHttpService,
+    TripoStsUploadService,
+    TripoMultiviewPipelineService,
+  ],
 })
 export class Tripo3dModule {}

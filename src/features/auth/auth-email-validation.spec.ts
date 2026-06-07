@@ -50,6 +50,8 @@ describe('auth DTO email validation', () => {
         password: 'password123',
         firstName: 'Jane',
         lastName: 'Doe',
+        phoneNumber: '0790000000',
+        city: 'Amman',
       }),
     );
 
@@ -59,6 +61,8 @@ describe('auth DTO email validation', () => {
         password: 'password123',
         firstName: 'Jane',
         lastName: 'Doe',
+        phoneNumber: '0790000000',
+        city: 'Amman',
       }),
     );
   });

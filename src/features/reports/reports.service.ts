@@ -1,5 +1,13 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ReportStatus, ThreadContext, VehicleListingStatus } from '@prisma/client';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  ReportStatus,
+  ThreadContext,
+  VehicleListingStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminMessagingService } from '../admin-messaging/admin-messaging.service';
 import { CreateReportDto } from './dto/create-report.dto';
@@ -50,11 +58,19 @@ export class ReportsService {
     });
   }
 
-  async findAllForAdmin(page = 1, limit = 10, status?: string, vehicleId?: string) {
+  async findAllForAdmin(
+    page = 1,
+    limit = 10,
+    status?: string,
+    vehicleId?: string,
+  ) {
     const skip = (page - 1) * limit;
     const where: Record<string, unknown> = {};
 
-    if (status && Object.values(ReportStatus).includes(status as ReportStatus)) {
+    if (
+      status &&
+      Object.values(ReportStatus).includes(status as ReportStatus)
+    ) {
       where.status = status as ReportStatus;
     }
     if (vehicleId) {
@@ -92,7 +108,10 @@ export class ReportsService {
 
   async findGroupedForAdmin(status?: string) {
     const where: Record<string, unknown> = {};
-    if (status && Object.values(ReportStatus).includes(status as ReportStatus)) {
+    if (
+      status &&
+      Object.values(ReportStatus).includes(status as ReportStatus)
+    ) {
       where.status = status as ReportStatus;
     }
 
@@ -120,21 +139,24 @@ export class ReportsService {
       },
     });
 
-    const grouped = new Map<string, {
-      vehicleId: string;
-      vehicleTitle: string;
-      vehicleBrand: string;
-      vehicleModel: string;
-      listingStatus: string;
-      vendorId: string;
-      vendorName: string;
-      vendorAccountId: string;
-      reportCount: number;
-      pendingCount: number;
-      latestReportDate: Date;
-      severity: 'low' | 'medium' | 'high';
-      reports: typeof reports;
-    }>();
+    const grouped = new Map<
+      string,
+      {
+        vehicleId: string;
+        vehicleTitle: string;
+        vehicleBrand: string;
+        vehicleModel: string;
+        listingStatus: string;
+        vendorId: string;
+        vendorName: string;
+        vendorAccountId: string;
+        reportCount: number;
+        pendingCount: number;
+        latestReportDate: Date;
+        severity: 'low' | 'medium' | 'high';
+        reports: typeof reports;
+      }
+    >();
 
     for (const report of reports) {
       const key = report.vehicleId;
@@ -174,7 +196,10 @@ export class ReportsService {
       (a, b) => b.reportCount - a.reportCount,
     );
 
-    return { data: result, meta: { totalVehicles: result.length, totalReports: reports.length } };
+    return {
+      data: result,
+      meta: { totalVehicles: result.length, totalReports: reports.length },
+    };
   }
 
   async resolveAllForVehicle(adminAccountId: string, vehicleId: string) {
@@ -184,8 +209,15 @@ export class ReportsService {
     if (!admin) throw new NotFoundException('Admin profile not found');
 
     const result = await this.prisma.report.updateMany({
-      where: { vehicleId, status: { in: [ReportStatus.PENDING, ReportStatus.REVIEWED] } },
-      data: { status: ReportStatus.RESOLVED, reviewedByAdminId: admin.id, reviewedAt: new Date() },
+      where: {
+        vehicleId,
+        status: { in: [ReportStatus.PENDING, ReportStatus.REVIEWED] },
+      },
+      data: {
+        status: ReportStatus.RESOLVED,
+        reviewedByAdminId: admin.id,
+        reviewedAt: new Date(),
+      },
     });
 
     return { message: `${result.count} reports resolved` };
@@ -198,15 +230,24 @@ export class ReportsService {
     if (!admin) throw new NotFoundException('Admin profile not found');
 
     const result = await this.prisma.report.updateMany({
-      where: { vehicleId, status: { in: [ReportStatus.PENDING, ReportStatus.REVIEWED] } },
-      data: { status: ReportStatus.DISMISSED, reviewedByAdminId: admin.id, reviewedAt: new Date() },
+      where: {
+        vehicleId,
+        status: { in: [ReportStatus.PENDING, ReportStatus.REVIEWED] },
+      },
+      data: {
+        status: ReportStatus.DISMISSED,
+        reviewedByAdminId: admin.id,
+        reviewedAt: new Date(),
+      },
     });
 
     return { message: `${result.count} reports dismissed` };
   }
 
   async hideVehicleListing(adminAccountId: string, vehicleId: string) {
-    const vehicle = await this.prisma.vehicle.findUnique({ where: { id: vehicleId } });
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+    });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
 
     await this.prisma.vehicle.update({
@@ -240,7 +281,11 @@ export class ReportsService {
     });
   }
 
-  async updateStatus(adminAccountId: string, reportId: string, dto: UpdateReportStatusDto) {
+  async updateStatus(
+    adminAccountId: string,
+    reportId: string,
+    dto: UpdateReportStatusDto,
+  ) {
     const admin = await this.prisma.admin.findUnique({
       where: { accountId: adminAccountId },
     });

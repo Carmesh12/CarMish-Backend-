@@ -31,7 +31,8 @@ export class ConversationsController {
   @HttpCode(HttpStatus.CREATED)
   create(
     @CurrentUser() user: JwtUser,
-    @Body() body: {
+    @Body()
+    body: {
       vendorAccountId: string;
       context: string;
       contextEntityId?: string;
@@ -47,7 +48,8 @@ export class ConversationsController {
   @HttpCode(HttpStatus.OK)
   findOrCreate(
     @CurrentUser() user: JwtUser,
-    @Body() body: {
+    @Body()
+    body: {
       vendorAccountId: string;
       userAccountId?: string;
       context: 'PURCHASE_REQUEST' | 'RENTAL_REQUEST';

@@ -398,6 +398,7 @@ export class Vehicle3dService {
       status: job.status,
       errorMessage:
         job.status === Vehicle3DJobStatus.FAILED ? job.errorMessage : null,
+      modelId: model?.id ?? null,
       modelUrl: await this.resolveModelUrl(model?.modelUrl),
     };
   }
@@ -630,6 +631,7 @@ export class Vehicle3dService {
       status: job.status,
       errorMessage:
         job.status === Vehicle3DJobStatus.FAILED ? job.errorMessage : null,
+      modelId: model?.id ?? null,
       modelUrl: await this.resolveModelUrl(model?.modelUrl),
     };
   }
@@ -686,6 +688,7 @@ export class Vehicle3dService {
       throw new NotFoundException('No 3D model available for this listing');
     }
     return {
+      modelId: model.id,
       modelUrl: (await this.resolveModelUrl(model.modelUrl)) ?? model.modelUrl,
     };
   }

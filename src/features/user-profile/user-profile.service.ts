@@ -26,6 +26,8 @@ type AccountUserRow = {
     firstName: string;
     lastName: string;
     phoneNumber: string | null;
+    city: string | null;
+    address: string | null;
     profileImageUrl: string | null;
     createdAt: Date;
     updatedAt: Date;
@@ -44,6 +46,46 @@ export class UserProfileService {
     return this.toProfileResponse(account);
   }
 
+  async getPublicProfile(accountId: string) {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+      select: {
+        id: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            city: true,
+            profileImageUrl: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    if (
+      !account ||
+      account.role !== Role.USER ||
+      !account.isActive ||
+      !account.user
+    ) {
+      throw new NotFoundException('User profile not found');
+    }
+
+    return {
+      accountId: account.id,
+      firstName: account.user.firstName,
+      lastName: account.user.lastName,
+      city: account.user.city,
+      profileImageUrl: account.user.profileImageUrl,
+      memberSince: account.createdAt,
+      profileCreatedAt: account.user.createdAt,
+    };
+  }
+
   async updateProfile(accountId: string, dto: UpdateUserProfileDto) {
     const account = await this.loadUserAccount(accountId);
     const userId = account.user!.id;
@@ -52,22 +94,15 @@ export class UserProfileService {
       firstName?: string;
       lastName?: string;
       phoneNumber?: string | null;
+      city?: string | null;
+      address?: string | null;
     } = {};
 
-    if (dto.firstName !== undefined) {
-      data.firstName = dto.firstName.trim();
-    }
-    if (dto.lastName !== undefined) {
-      data.lastName = dto.lastName.trim();
-    }
-    if (dto.phoneNumber !== undefined) {
-      const t = dto.phoneNumber.trim();
-      data.phoneNumber = t === '' ? null : t;
-    }
-
-    if (Object.keys(data).length === 0) {
-      return this.toProfileResponse(account);
-    }
+    data.firstName = dto.firstName.trim();
+    data.lastName = dto.lastName.trim();
+    data.phoneNumber = dto.phoneNumber.trim();
+    data.city = dto.city.trim();
+    data.address = dto.address?.trim() || null;
 
     await this.prisma.user.update({
       where: { id: userId },
@@ -80,7 +115,9 @@ export class UserProfileService {
 
   async changePassword(accountId: string, dto: ChangeUserPasswordDto) {
     if (dto.newPassword !== dto.confirmNewPassword) {
-      throw new BadRequestException('New password and confirmation do not match');
+      throw new BadRequestException(
+        'New password and confirmation do not match',
+      );
     }
 
     const account = await this.prisma.account.findUnique({
@@ -196,6 +233,8 @@ export class UserProfileService {
             firstName: true,
             lastName: true,
             phoneNumber: true,
+            city: true,
+            address: true,
             profileImageUrl: true,
             createdAt: true,
             updatedAt: true,
@@ -224,6 +263,8 @@ export class UserProfileService {
       firstName: u.firstName,
       lastName: u.lastName,
       phoneNumber: u.phoneNumber,
+      city: u.city,
+      address: u.address,
       profileImageUrl: u.profileImageUrl,
       accountCreatedAt: account.createdAt,
       accountUpdatedAt: account.updatedAt,
@@ -238,6 +279,8 @@ export class UserProfileService {
       firstName: string;
       lastName: string;
       phoneNumber: string | null;
+      city: string | null;
+      address: string | null;
       profileImageUrl: string | null;
     },
   ) {
@@ -250,13 +293,23 @@ export class UserProfileService {
         filled: (user.phoneNumber ?? '').trim().length > 0,
       },
       {
+        key: 'city',
+        filled: (user.city ?? '').trim().length > 0,
+      },
+      {
+        key: 'address',
+        filled: (user.address ?? '').trim().length > 0,
+      },
+      {
         key: 'profileImageUrl',
         filled: (user.profileImageUrl ?? '').trim().length > 0,
       },
     ];
     const completedFields = checks.filter((c) => c.filled).map((c) => c.key);
     const missingFields = checks.filter((c) => !c.filled).map((c) => c.key);
-    const percentage = Math.round((completedFields.length / 5) * 100);
+    const percentage = Math.round(
+      (completedFields.length / checks.length) * 100,
+    );
     return { percentage, completedFields, missingFields };
   }
 }

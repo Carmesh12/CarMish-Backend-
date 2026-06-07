@@ -4,7 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ListingType, Role, VehicleListingStatus } from '@prisma/client';
+import {
+  Currency,
+  ListingType,
+  Role,
+  VehicleCondition,
+  VehicleListingStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
@@ -37,23 +43,61 @@ export class VehiclesService {
       dto.price,
       dto.rentalPricePerDay,
     );
+    this.validateMileageForCondition(dto.condition, dto.mileage);
+
+    const title = this.buildVehicleTitle(dto.brand, dto.model, dto.year);
+    const mainImageUrl = dto.imageUrls?.[0] ?? null;
 
     const vehicle = await this.prisma.vehicle.create({
       data: {
         vendorId: vendor.id,
-        title: dto.title,
+        title,
         brand: dto.brand,
         model: dto.model,
+        trim: dto.trim,
         year: dto.year,
+        condition: dto.condition,
         listingType: dto.listingType,
         description: dto.description,
         color: dto.color,
         fuelType: dto.fuelType,
+        engineType: dto.engineType,
+        engineCapacity: dto.engineCapacity,
+        horsepower: dto.horsepower,
         transmission: dto.transmission,
+        drivetrain: dto.drivetrain,
+        cylinders: dto.cylinders,
+        acceleration: dto.acceleration,
+        topSpeed: dto.topSpeed,
+        fuelConsumption: dto.fuelConsumption,
+        fuelTankCapacity: dto.fuelTankCapacity,
+        bodyType: dto.bodyType,
+        doors: dto.doors,
+        wheelsSize: dto.wheelsSize,
+        seats: dto.seats,
+        interiorMaterial: dto.interiorMaterial,
+        hasSunroof: dto.hasSunroof,
+        hasNavigation: dto.hasNavigation,
+        hasBluetooth: dto.hasBluetooth,
+        hasCamera: dto.hasCamera,
         mileage: dto.mileage,
         price: dto.price,
+        currency: dto.currency ?? Currency.USD,
+        negotiable: dto.negotiable,
         rentalPricePerDay: dto.rentalPricePerDay,
+        vinNumber: dto.vinNumber,
+        mainImageUrl,
         locationCity: dto.locationCity,
+        locationCountry: dto.locationCountry ?? 'Jordan',
+        images: dto.imageUrls
+          ? {
+              create: dto.imageUrls.map((imageUrl, index) => ({
+                imageUrl,
+                sortOrder: index,
+                isPrimary: index === 0,
+              })),
+            }
+          : undefined,
       },
     });
 
@@ -170,30 +214,86 @@ export class VehiclesService {
       dto.rentalPricePerDay !== undefined
         ? dto.rentalPricePerDay
         : vehicle.rentalPricePerDay;
+    const finalCondition = dto.condition ?? vehicle.condition;
+    const finalMileage =
+      dto.mileage !== undefined ? dto.mileage : vehicle.mileage;
 
     this.validatePriceForListingType(
       finalListingType,
       finalPrice,
       finalRentalPrice,
     );
+    this.validateMileageForCondition(finalCondition, finalMileage);
 
-    const updated = await this.prisma.vehicle.update({
-      where: { id: vehicleId },
-      data: {
-        title: dto.title,
-        description: dto.description,
-        brand: dto.brand,
-        model: dto.model,
-        year: dto.year,
-        color: dto.color,
-        fuelType: dto.fuelType,
-        transmission: dto.transmission,
-        mileage: dto.mileage,
-        price: dto.price,
-        rentalPricePerDay: dto.rentalPricePerDay,
-        locationCity: dto.locationCity,
-        listingType: dto.listingType,
-      },
+    const shouldRegenerateTitle =
+      dto.brand !== undefined ||
+      dto.model !== undefined ||
+      dto.year !== undefined;
+    const finalTitle = shouldRegenerateTitle
+      ? this.buildVehicleTitle(
+          dto.brand ?? vehicle.brand,
+          dto.model ?? vehicle.model,
+          dto.year ?? vehicle.year,
+        )
+      : dto.title;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (dto.imageUrls) {
+        await tx.vehicleImage.deleteMany({ where: { vehicleId } });
+      }
+
+      return tx.vehicle.update({
+        where: { id: vehicleId },
+        data: {
+          title: finalTitle,
+          description: dto.description,
+          brand: dto.brand,
+          model: dto.model,
+          trim: dto.trim,
+          year: dto.year,
+          condition: dto.condition,
+          color: dto.color,
+          fuelType: dto.fuelType,
+          engineType: dto.engineType,
+          engineCapacity: dto.engineCapacity,
+          horsepower: dto.horsepower,
+          transmission: dto.transmission,
+          drivetrain: dto.drivetrain,
+          cylinders: dto.cylinders,
+          acceleration: dto.acceleration,
+          topSpeed: dto.topSpeed,
+          fuelConsumption: dto.fuelConsumption,
+          fuelTankCapacity: dto.fuelTankCapacity,
+          bodyType: dto.bodyType,
+          doors: dto.doors,
+          wheelsSize: dto.wheelsSize,
+          seats: dto.seats,
+          interiorMaterial: dto.interiorMaterial,
+          hasSunroof: dto.hasSunroof,
+          hasNavigation: dto.hasNavigation,
+          hasBluetooth: dto.hasBluetooth,
+          hasCamera: dto.hasCamera,
+          mileage: dto.mileage,
+          price: dto.price,
+          currency: dto.currency,
+          negotiable: dto.negotiable,
+          rentalPricePerDay: dto.rentalPricePerDay,
+          locationCity: dto.locationCity,
+          locationCountry: dto.locationCountry,
+          vinNumber: dto.vinNumber,
+          mainImageUrl: dto.imageUrls ? dto.imageUrls[0] : undefined,
+          listingType: dto.listingType,
+          images: dto.imageUrls
+            ? {
+                create: dto.imageUrls.map((imageUrl, index) => ({
+                  imageUrl,
+                  sortOrder: index,
+                  isPrimary: index === 0,
+                })),
+              }
+            : undefined,
+        },
+      });
     });
 
     return updated;
@@ -213,6 +313,10 @@ export class VehiclesService {
     }
 
     await this.assertCanModifyVehicle(user, vehicle);
+
+    if (dto.listingStatus === VehicleListingStatus.PUBLISHED) {
+      await this.validateMediaForPublishing(vehicleId, vehicle.mainImageUrl);
+    }
 
     return this.prisma.vehicle.update({
       where: { id: vehicleId },
@@ -318,6 +422,46 @@ export class VehiclesService {
           );
         }
         break;
+    }
+  }
+
+  private validateMileageForCondition(
+    condition: VehicleCondition,
+    mileage: unknown,
+  ): void {
+    if (condition === VehicleCondition.USED && mileage == null) {
+      throw new BadRequestException(
+        'mileage is required when condition is USED',
+      );
+    }
+  }
+
+  private buildVehicleTitle(
+    brand: string,
+    model: string,
+    year: number,
+  ): string {
+    return `${brand.trim()} ${model.trim()} ${year}`;
+  }
+
+  private async validateMediaForPublishing(
+    vehicleId: string,
+    mainImageUrl: string | null,
+  ): Promise<void> {
+    const imageCount = await this.prisma.vehicleImage.count({
+      where: { vehicleId },
+    });
+
+    if (imageCount < 3 || imageCount > 8) {
+      throw new BadRequestException(
+        'Published vehicles must have between 3 and 8 images',
+      );
+    }
+
+    if (!mainImageUrl) {
+      throw new BadRequestException(
+        'Published vehicles must have a primary image',
+      );
     }
   }
 }

@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { extractErrorMessage, urlHostForLog } from '../../common/errors/error-message.util';
+import {
+  extractErrorMessage,
+  urlHostForLog,
+} from '../../common/errors/error-message.util';
 import { TripoHttpService } from './tripo-http.service';
 import { TripoStsUploadService } from './tripo-sts-upload.service';
 import { SupabaseStorageService } from '../../common/supabase/supabase-storage.service';
@@ -39,9 +42,7 @@ export class TripoMultiviewPipelineService {
   ) {}
 
   private modelVersion(): string {
-    return (
-      process.env.TRIPO_MULTIVIEW_MODEL_VERSION?.trim() || 'v3.1-20260211'
-    );
+    return process.env.TRIPO_MULTIVIEW_MODEL_VERSION?.trim() || 'v3.1-20260211';
   }
 
   private fileTypeForMime(mimetype: string): string {
@@ -138,7 +139,10 @@ export class TripoMultiviewPipelineService {
     const files: Record<string, unknown>[] = [];
     for (let i = 0; i < 4; i++) {
       const slot = slots[i];
-      const obj = await this.stsUpload.uploadImageBuffer(slot.buffer, slot.mimetype);
+      const obj = await this.stsUpload.uploadImageBuffer(
+        slot.buffer,
+        slot.mimetype,
+      );
       files.push({
         type: this.fileTypeForMime(slot.mimetype),
         object: { bucket: obj.bucket, key: obj.key },
@@ -153,7 +157,10 @@ export class TripoMultiviewPipelineService {
       pbr: true,
     };
 
-    const created = await this.tripoHttp.postJson<Record<string, unknown>>('/task', taskBody);
+    const created = await this.tripoHttp.postJson<Record<string, unknown>>(
+      '/task',
+      taskBody,
+    );
     const taskId =
       (typeof created.task_id === 'string' && created.task_id) ||
       (typeof created.taskId === 'string' && created.taskId) ||

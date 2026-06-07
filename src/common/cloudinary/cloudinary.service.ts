@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { v2 as cloudinary, type UploadApiResponse } from 'cloudinary';
 import { Readable } from 'stream';
 
@@ -28,11 +25,12 @@ export class CloudinaryService {
     return this.ready;
   }
 
-  async uploadImageBuffer(buffer: Buffer, folderOverride?: string): Promise<string> {
+  async uploadImageBuffer(
+    buffer: Buffer,
+    folderOverride?: string,
+  ): Promise<string> {
     if (!this.ready) {
-      throw new InternalServerErrorException(
-        'Image upload is not configured',
-      );
+      throw new InternalServerErrorException('Image upload is not configured');
     }
 
     const folder =

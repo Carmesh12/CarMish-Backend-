@@ -1,11 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { memoryStorage } from 'multer';
 
-const ALLOWED_MIME = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-]);
+const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 export const vehicleImagesMulterOptions = {
   storage: memoryStorage(),
@@ -20,9 +16,7 @@ export const vehicleImagesMulterOptions = {
   ) => {
     if (!ALLOWED_MIME.has(file.mimetype)) {
       cb(
-        new BadRequestException(
-          'Only JPEG, PNG, and WebP images are allowed',
-        ),
+        new BadRequestException('Only JPEG, PNG, and WebP images are allowed'),
         false,
       );
       return;

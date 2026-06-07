@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -31,7 +42,11 @@ export class ReviewsController {
     @Param('vehicleId', ParseUUIDPipe) vehicleId: string,
     @Query() query: GetReviewsDto,
   ) {
-    return this.reviewsService.findAllByVehicle(vehicleId, query.page, query.limit);
+    return this.reviewsService.findAllByVehicle(
+      vehicleId,
+      query.page,
+      query.limit,
+    );
   }
 
   @Patch('reviews/:id')
@@ -48,10 +63,7 @@ export class ReviewsController {
   @Delete('reviews/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.USER)
-  remove(
-    @CurrentUser() user: JwtUser,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  remove(@CurrentUser() user: JwtUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.reviewsService.remove(user.id, id);
   }
 }

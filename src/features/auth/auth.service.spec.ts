@@ -19,7 +19,14 @@ const baseAccount = {
   emailVerified: true,
   emailVerificationTokenHash: null,
   emailVerificationTokenExpiresAt: null,
-  user: { accountId: 'account-id', firstName: 'Jane', lastName: 'Doe' },
+  user: {
+    accountId: 'account-id',
+    firstName: 'Jane',
+    lastName: 'Doe',
+    phoneNumber: '0790000000',
+    city: 'Amman',
+    address: null,
+  },
   vendor: null,
   admin: null,
 };
@@ -100,8 +107,7 @@ describe('AuthService email verification', () => {
         role: data.role,
         emailVerified: data.emailVerified,
         emailVerificationTokenHash: data.emailVerificationTokenHash,
-        emailVerificationTokenExpiresAt:
-          data.emailVerificationTokenExpiresAt,
+        emailVerificationTokenExpiresAt: data.emailVerificationTokenExpiresAt,
         user: {
           accountId: 'account-id',
           ...data.user.create,
@@ -114,6 +120,9 @@ describe('AuthService email verification', () => {
       'password123',
       'Jane',
       'Doe',
+      '0790000000',
+      'Amman',
+      '7th Circle',
     );
 
     expect(result).toEqual({

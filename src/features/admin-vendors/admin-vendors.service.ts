@@ -30,20 +30,30 @@ export class AdminVendorsService {
         skip,
         take: limit,
         include: {
-          account: { select: { id: true, email: true, createdAt: true, isActive: true } },
+          account: {
+            select: { id: true, email: true, createdAt: true, isActive: true },
+          },
         },
       }),
       this.prisma.vendor.count({ where }),
     ]);
 
-    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async listAllVendors(page = 1, limit = 10, status?: string, search?: string) {
     const skip = (page - 1) * limit;
     const where: Record<string, unknown> = {};
 
-    if (status && Object.values(VendorVerificationStatus).includes(status as VendorVerificationStatus)) {
+    if (
+      status &&
+      Object.values(VendorVerificationStatus).includes(
+        status as VendorVerificationStatus,
+      )
+    ) {
       where.verificationStatus = status as VendorVerificationStatus;
     }
     if (search) {
@@ -61,14 +71,25 @@ export class AdminVendorsService {
         skip,
         take: limit,
         include: {
-          account: { select: { id: true, email: true, createdAt: true, isActive: true } },
-          _count: { select: { vehicles: true, purchaseRequests: true, rentalRequests: true } },
+          account: {
+            select: { id: true, email: true, createdAt: true, isActive: true },
+          },
+          _count: {
+            select: {
+              vehicles: true,
+              purchaseRequests: true,
+              rentalRequests: true,
+            },
+          },
         },
       }),
       this.prisma.vendor.count({ where }),
     ]);
 
-    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async getPendingCount() {
@@ -99,21 +120,27 @@ export class AdminVendorsService {
       relatedEntityId: vendorId,
     });
 
-    await this.mailService.sendMail({
-      to: vendor.account.email,
-      subject: 'CarMesh - Your Vendor Account Has Been Approved',
-      html: `
+    await this.mailService
+      .sendMail({
+        to: vendor.account.email,
+        subject: 'CarMesh - Your Vendor Account Has Been Approved',
+        html: `
         <h2>Congratulations!</h2>
         <p>Your vendor account <strong>${vendor.businessName}</strong> has been approved on CarMesh.</p>
         <p>You can now log in and start publishing your vehicle listings.</p>
         <p>Welcome to the CarMesh marketplace!</p>
       `,
-    }).catch(() => {});
+      })
+      .catch(() => {});
 
     return { message: 'Vendor approved successfully' };
   }
 
-  async rejectVendor(adminAccountId: string, vendorId: string, reason?: string) {
+  async rejectVendor(
+    adminAccountId: string,
+    vendorId: string,
+    reason?: string,
+  ) {
     const vendor = await this.prisma.vendor.findUnique({
       where: { id: vendorId },
       include: { account: { select: { id: true, email: true } } },
@@ -137,16 +164,18 @@ export class AdminVendorsService {
       relatedEntityId: vendorId,
     });
 
-    await this.mailService.sendMail({
-      to: vendor.account.email,
-      subject: 'CarMesh - Vendor Account Application Update',
-      html: `
+    await this.mailService
+      .sendMail({
+        to: vendor.account.email,
+        subject: 'CarMesh - Vendor Account Application Update',
+        html: `
         <h2>Vendor Account Application</h2>
         <p>Unfortunately, your vendor account application for <strong>${vendor.businessName}</strong> has been rejected.</p>
         ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
         <p>If you believe this is an error, please contact our support team.</p>
       `,
-    }).catch(() => {});
+      })
+      .catch(() => {});
 
     return { message: 'Vendor rejected successfully' };
   }

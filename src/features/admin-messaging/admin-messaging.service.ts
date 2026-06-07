@@ -1,5 +1,14 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { NotificationType, RelatedEntityType, Role, ThreadContext } from '@prisma/client';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
+import {
+  NotificationType,
+  RelatedEntityType,
+  Role,
+  ThreadContext,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MailService } from '../../common/mail/mail.service';
@@ -52,17 +61,19 @@ export class AdminMessagingService {
         relatedEntityId: thread.id,
       });
 
-      await this.mailService.sendMail({
-        to: vendorAccount.email,
-        subject: `[CarMesh Admin] ${data.subject}`,
-        html: `
+      await this.mailService
+        .sendMail({
+          to: vendorAccount.email,
+          subject: `[CarMesh Admin] ${data.subject}`,
+          html: `
           <h3>Message from CarMesh Admin</h3>
           <p><strong>Subject:</strong> ${data.subject}</p>
           <p>${data.body.replace(/\n/g, '<br>')}</p>
           <hr>
           <p>Log in to your CarMesh account to reply.</p>
         `,
-      }).catch(() => {});
+        })
+        .catch(() => {});
     }
 
     return thread;
@@ -99,10 +110,18 @@ export class AdminMessagingService {
     const recipientId = isAdminSender
       ? thread.vendorAccountId
       : thread.adminAccountId;
+    const sender = await this.prisma.account.findUnique({
+      where: { id: data.senderAccountId },
+      select: { role: true },
+    });
 
     await this.notificationsService.createNotification({
       accountId: recipientId,
-      title: isAdminSender ? 'New message from Admin' : 'New vendor reply',
+      title: isAdminSender
+        ? 'New message from Admin'
+        : sender?.role === Role.USER
+          ? 'New user reply'
+          : 'New vendor reply',
       body: data.body.slice(0, 120),
       type: isAdminSender
         ? NotificationType.ADMIN_MESSAGE_RECEIVED
@@ -117,16 +136,18 @@ export class AdminMessagingService {
     });
 
     if (recipient) {
-      await this.mailService.sendMail({
-        to: recipient.email,
-        subject: `[CarMesh] Re: ${thread.subject}`,
-        html: `
+      await this.mailService
+        .sendMail({
+          to: recipient.email,
+          subject: `[CarMesh] Re: ${thread.subject}`,
+          html: `
           <p>New reply in thread: <strong>${thread.subject}</strong></p>
           <p>${data.body.replace(/\n/g, '<br>')}</p>
           <hr>
           <p>Log in to your CarMesh account to view the full conversation.</p>
         `,
-      }).catch(() => {});
+        })
+        .catch(() => {});
     }
 
     return message;
@@ -142,13 +163,21 @@ export class AdminMessagingService {
         take: limit,
         include: {
           messages: { orderBy: { createdAt: 'asc' } },
-          adminAccount: { select: { email: true, admin: { select: { firstName: true, lastName: true } } } },
+          adminAccount: {
+            select: {
+              email: true,
+              admin: { select: { firstName: true, lastName: true } },
+            },
+          },
         },
       }),
       this.prisma.adminVendorThread.count({ where: { vendorAccountId } }),
     ]);
 
-    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async getThreadById(threadId: string, requestingAccountId: string) {
@@ -157,10 +186,48 @@ export class AdminMessagingService {
       include: {
         messages: {
           orderBy: { createdAt: 'asc' },
-          include: { senderAccount: { select: { email: true, role: true } } },
+          include: {
+            senderAccount: {
+              select: {
+                email: true,
+                role: true,
+                user: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                    profileImageUrl: true,
+                  },
+                },
+                vendor: {
+                  select: {
+                    businessName: true,
+                    logoUrl: true,
+                  },
+                },
+                admin: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                  },
+                },
+              },
+            },
+          },
         },
-        adminAccount: { select: { email: true, admin: { select: { firstName: true, lastName: true } } } },
-        vendorAccount: { select: { email: true, vendor: { select: { businessName: true } } } },
+        adminAccount: {
+          select: {
+            email: true,
+            admin: { select: { firstName: true, lastName: true } },
+          },
+        },
+        vendorAccount: {
+          select: {
+            email: true,
+            role: true,
+            user: { select: { firstName: true, lastName: true } },
+            vendor: { select: { businessName: true } },
+          },
+        },
       },
     });
 
@@ -187,7 +254,29 @@ export class AdminMessagingService {
       data: { isRead: true },
     });
 
-    return thread;
+    await this.prisma.notification.updateMany({
+      where: {
+        accountId: requestingAccountId,
+        relatedEntityId: threadId,
+        type: {
+          in: [
+            NotificationType.ADMIN_MESSAGE_RECEIVED,
+            NotificationType.VENDOR_MESSAGE_RECEIVED,
+          ],
+        },
+        isRead: false,
+      },
+      data: { isRead: true },
+    });
+
+    return {
+      ...thread,
+      messages: thread.messages.map((message) =>
+        !message.isRead && message.senderAccountId !== requestingAccountId
+          ? { ...message, isRead: true }
+          : message,
+      ),
+    };
   }
 
   async getMyThreads(accountId: string, role: Role, page = 1, limit = 20) {
@@ -205,14 +294,24 @@ export class AdminMessagingService {
         take: limit,
         include: {
           messages: { orderBy: { createdAt: 'desc' }, take: 1 },
-          vendorAccount: { select: { email: true, vendor: { select: { businessName: true } } } },
+          vendorAccount: {
+            select: {
+              email: true,
+              role: true,
+              user: { select: { firstName: true, lastName: true } },
+              vendor: { select: { businessName: true } },
+            },
+          },
           adminAccount: { select: { email: true } },
         },
       }),
       this.prisma.adminVendorThread.count({ where }),
     ]);
 
-    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async closeThread(threadId: string, adminAccountId: string) {
@@ -220,6 +319,9 @@ export class AdminMessagingService {
       where: { id: threadId },
     });
     if (!thread) throw new NotFoundException('Thread not found');
+    if (thread.adminAccountId !== adminAccountId) {
+      throw new ForbiddenException('Access denied');
+    }
 
     return this.prisma.adminVendorThread.update({
       where: { id: threadId },

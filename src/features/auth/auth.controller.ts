@@ -36,6 +36,8 @@ export class AuthController {
       dto.firstName,
       dto.lastName,
       dto.phoneNumber,
+      dto.city,
+      dto.address,
     );
   }
 

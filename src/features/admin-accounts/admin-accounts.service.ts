@@ -56,7 +56,10 @@ export class AdminAccountsService {
       this.prisma.account.count({ where }),
     ]);
 
-    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async getAccountDetails(accountId: string) {
@@ -90,7 +93,11 @@ export class AdminAccountsService {
     return { ...account, vehicleReportCount: reportCount };
   }
 
-  async deactivateAccount(adminAccountId: string, targetAccountId: string, reason?: string) {
+  async deactivateAccount(
+    adminAccountId: string,
+    targetAccountId: string,
+    reason?: string,
+  ) {
     if (adminAccountId === targetAccountId) {
       throw new BadRequestException('You cannot deactivate your own account');
     }
@@ -124,16 +131,18 @@ export class AdminAccountsService {
       relatedEntityId: targetAccountId,
     });
 
-    await this.mailService.sendMail({
-      to: account.email,
-      subject: 'CarMesh - Account Deactivated',
-      html: `
+    await this.mailService
+      .sendMail({
+        to: account.email,
+        subject: 'CarMesh - Account Deactivated',
+        html: `
         <h2>Account Deactivated</h2>
         <p>Your CarMesh account has been deactivated by an administrator.</p>
         ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
         <p>If you believe this is an error, please contact our support team.</p>
       `,
-    }).catch(() => {});
+      })
+      .catch(() => {});
 
     return { message: 'Account deactivated successfully' };
   }
@@ -163,14 +172,16 @@ export class AdminAccountsService {
       relatedEntityId: targetAccountId,
     });
 
-    await this.mailService.sendMail({
-      to: account.email,
-      subject: 'CarMesh - Account Reactivated',
-      html: `
+    await this.mailService
+      .sendMail({
+        to: account.email,
+        subject: 'CarMesh - Account Reactivated',
+        html: `
         <h2>Account Reactivated</h2>
         <p>Your CarMesh account has been reactivated. You can now log in and use the platform.</p>
       `,
-    }).catch(() => {});
+      })
+      .catch(() => {});
 
     return { message: 'Account activated successfully' };
   }

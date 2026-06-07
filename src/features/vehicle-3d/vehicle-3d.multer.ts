@@ -25,7 +25,12 @@ export const vehicle3dJobMulterOptions = {
   ) => {
     if (file.fieldname === 'model') {
       if (!isThreeDMockMode()) {
-        cb(new BadRequestException('Direct model upload is only allowed in mock mode'), false);
+        cb(
+          new BadRequestException(
+            'Direct model upload is only allowed in mock mode',
+          ),
+          false,
+        );
         return;
       }
       const mimeOk = MODEL_MIME.has(file.mimetype) || file.mimetype === '';
@@ -37,7 +42,10 @@ export const vehicle3dJobMulterOptions = {
         return;
       }
       if (!isGlbFilename(file.originalname)) {
-        cb(new BadRequestException('Mock mode requires a .glb file extension'), false);
+        cb(
+          new BadRequestException('Mock mode requires a .glb file extension'),
+          false,
+        );
         return;
       }
       cb(null, true);
@@ -67,7 +75,10 @@ export const vehicle3dJobMulterOptions = {
       return;
     }
 
-    cb(new BadRequestException(`Unexpected upload field: ${file.fieldname}`), false);
+    cb(
+      new BadRequestException(`Unexpected upload field: ${file.fieldname}`),
+      false,
+    );
   },
 };
 

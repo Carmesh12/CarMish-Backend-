@@ -22,13 +22,16 @@ export class ConversationsService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  async create(senderAccountId: string, dto: {
-    vendorAccountId: string;
-    context: string;
-    contextEntityId?: string;
-    vehicleId?: string;
-    message: string;
-  }) {
+  async create(
+    senderAccountId: string,
+    dto: {
+      vendorAccountId: string;
+      context: string;
+      contextEntityId?: string;
+      vehicleId?: string;
+      message: string;
+    },
+  ) {
     const sender = await this.prisma.account.findUnique({
       where: { id: senderAccountId },
       select: { role: true },
@@ -37,7 +40,12 @@ export class ConversationsService {
 
     const vendorAccount = await this.prisma.account.findUnique({
       where: { id: dto.vendorAccountId },
-      select: { id: true, email: true, role: true, vendor: { select: { id: true } } },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        vendor: { select: { id: true } },
+      },
     });
     if (!vendorAccount || vendorAccount.role !== Role.VENDOR) {
       throw new BadRequestException('Invalid vendor account');
@@ -56,7 +64,9 @@ export class ConversationsService {
         },
       });
       if (existing) {
-        throw new BadRequestException('A conversation for this request already exists');
+        throw new BadRequestException(
+          'A conversation for this request already exists',
+        );
       }
     }
 
@@ -76,7 +86,9 @@ export class ConversationsService {
       },
       include: {
         messages: true,
-        vehicle: { select: { id: true, title: true, brand: true, model: true } },
+        vehicle: {
+          select: { id: true, title: true, brand: true, model: true },
+        },
       },
     });
 
@@ -89,37 +101,80 @@ export class ConversationsService {
       relatedEntityId: conversation.id,
     });
 
-    await this.mailService.sendMail({
-      to: vendorAccount.email,
-      subject: '[CarMesh] New customer message',
-      html: `
+    await this.mailService
+      .sendMail({
+        to: vendorAccount.email,
+        subject: '[CarMesh] New customer message',
+        html: `
         <h3>New message from a customer</h3>
         <p>${dto.message.replace(/\n/g, '<br>')}</p>
         <hr>
         <p>Log in to your CarMesh account to reply.</p>
       `,
-    }).catch(() => {});
+      })
+      .catch(() => {});
 
     return conversation;
   }
 
-  async findOrCreate(senderAccountId: string, dto: {
-    vendorAccountId: string;
-    userAccountId?: string;
-    context: 'PURCHASE_REQUEST' | 'RENTAL_REQUEST';
-    contextEntityId: string;
-    message?: string;
-  }) {
+  async findOrCreate(
+    senderAccountId: string,
+    dto: {
+      vendorAccountId: string;
+      userAccountId?: string;
+      context: 'PURCHASE_REQUEST' | 'RENTAL_REQUEST';
+      contextEntityId: string;
+      message?: string;
+    },
+  ) {
     const existing = await this.prisma.conversation.findFirst({
       where: {
         context: dto.context as ConversationContext,
         contextEntityId: dto.contextEntityId,
       },
       include: {
-        messages: { orderBy: { createdAt: 'asc' }, include: { senderAccount: { select: { email: true, role: true } } } },
-        userAccount: { select: { email: true, user: { select: { firstName: true, lastName: true } } } },
-        vendorAccount: { select: { email: true, vendor: { select: { businessName: true } } } },
-        vehicle: { select: { id: true, title: true, brand: true, model: true } },
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            senderAccount: {
+              select: {
+                email: true,
+                role: true,
+                user: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                    profileImageUrl: true,
+                  },
+                },
+                vendor: {
+                  select: {
+                    businessName: true,
+                    logoUrl: true,
+                  },
+                },
+                admin: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        userAccount: {
+          select: {
+            email: true,
+            user: { select: { firstName: true, lastName: true } },
+          },
+        },
+        vendorAccount: {
+          select: { email: true, vendor: { select: { businessName: true } } },
+        },
+        vehicle: {
+          select: { id: true, title: true, brand: true, model: true },
+        },
       },
     });
 
@@ -132,12 +187,15 @@ export class ConversationsService {
 
     if (sender?.role === Role.VENDOR) {
       if (!dto.userAccountId) {
-        throw new BadRequestException('userAccountId is required for vendor-initiated conversations');
+        throw new BadRequestException(
+          'userAccountId is required for vendor-initiated conversations',
+        );
       }
       return this.createFromVendor(senderAccountId, dto.userAccountId, {
         context: dto.context,
         contextEntityId: dto.contextEntityId,
-        message: dto.message ?? 'Hi, I would like to discuss this request with you.',
+        message:
+          dto.message ?? 'Hi, I would like to discuss this request with you.',
       });
     }
 
@@ -149,11 +207,15 @@ export class ConversationsService {
     });
   }
 
-  private async createFromVendor(vendorAccountId: string, userAccountId: string, dto: {
-    context: string;
-    contextEntityId?: string;
-    message: string;
-  }) {
+  private async createFromVendor(
+    vendorAccountId: string,
+    userAccountId: string,
+    dto: {
+      context: string;
+      contextEntityId?: string;
+      message: string;
+    },
+  ) {
     const context = dto.context as ConversationContext;
 
     const conversation = await this.prisma.conversation.create({
@@ -172,7 +234,9 @@ export class ConversationsService {
       },
       include: {
         messages: true,
-        vehicle: { select: { id: true, title: true, brand: true, model: true } },
+        vehicle: {
+          select: { id: true, title: true, brand: true, model: true },
+        },
       },
     });
 
@@ -191,16 +255,18 @@ export class ConversationsService {
     });
 
     if (userAccount) {
-      await this.mailService.sendMail({
-        to: userAccount.email,
-        subject: '[CarMesh] New vendor message',
-        html: `
+      await this.mailService
+        .sendMail({
+          to: userAccount.email,
+          subject: '[CarMesh] New vendor message',
+          html: `
           <h3>New message from a vendor</h3>
           <p>${dto.message.replace(/\n/g, '<br>')}</p>
           <hr>
           <p>Log in to your CarMesh account to reply.</p>
         `,
-      }).catch(() => {});
+        })
+        .catch(() => {});
     }
 
     return conversation;
@@ -215,9 +281,10 @@ export class ConversationsService {
     });
     if (!account) throw new NotFoundException('Account not found');
 
-    const where = account.role === Role.VENDOR
-      ? { vendorAccountId: accountId }
-      : { userAccountId: accountId };
+    const where =
+      account.role === Role.VENDOR
+        ? { vendorAccountId: accountId }
+        : { userAccountId: accountId };
 
     const [data, total] = await Promise.all([
       this.prisma.conversation.findMany({
@@ -227,15 +294,27 @@ export class ConversationsService {
         take: limit,
         include: {
           messages: { orderBy: { createdAt: 'desc' }, take: 1 },
-          userAccount: { select: { email: true, user: { select: { firstName: true, lastName: true } } } },
-          vendorAccount: { select: { email: true, vendor: { select: { businessName: true } } } },
-          vehicle: { select: { id: true, title: true, brand: true, model: true } },
+          userAccount: {
+            select: {
+              email: true,
+              user: { select: { firstName: true, lastName: true } },
+            },
+          },
+          vendorAccount: {
+            select: { email: true, vendor: { select: { businessName: true } } },
+          },
+          vehicle: {
+            select: { id: true, title: true, brand: true, model: true },
+          },
         },
       }),
       this.prisma.conversation.count({ where }),
     ]);
 
-    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async getById(conversationId: string, requestingAccountId: string) {
@@ -244,11 +323,46 @@ export class ConversationsService {
       include: {
         messages: {
           orderBy: { createdAt: 'asc' },
-          include: { senderAccount: { select: { email: true, role: true } } },
+          include: {
+            senderAccount: {
+              select: {
+                email: true,
+                role: true,
+                user: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                    profileImageUrl: true,
+                  },
+                },
+                vendor: {
+                  select: {
+                    businessName: true,
+                    logoUrl: true,
+                  },
+                },
+                admin: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                  },
+                },
+              },
+            },
+          },
         },
-        userAccount: { select: { email: true, user: { select: { firstName: true, lastName: true } } } },
-        vendorAccount: { select: { email: true, vendor: { select: { businessName: true } } } },
-        vehicle: { select: { id: true, title: true, brand: true, model: true } },
+        userAccount: {
+          select: {
+            email: true,
+            user: { select: { firstName: true, lastName: true } },
+          },
+        },
+        vendorAccount: {
+          select: { email: true, vendor: { select: { businessName: true } } },
+        },
+        vehicle: {
+          select: { id: true, title: true, brand: true, model: true },
+        },
       },
     });
 
@@ -270,16 +384,43 @@ export class ConversationsService {
       data: { isRead: true },
     });
 
-    return conversation;
+    await this.prisma.notification.updateMany({
+      where: {
+        accountId: requestingAccountId,
+        relatedEntityId: conversationId,
+        type: {
+          in: [
+            NotificationType.CONVERSATION_NEW,
+            NotificationType.CONVERSATION_MESSAGE_RECEIVED,
+          ],
+        },
+        isRead: false,
+      },
+      data: { isRead: true },
+    });
+
+    return {
+      ...conversation,
+      messages: conversation.messages.map((message) =>
+        !message.isRead && message.senderAccountId !== requestingAccountId
+          ? { ...message, isRead: true }
+          : message,
+      ),
+    };
   }
 
-  async sendMessage(conversationId: string, senderAccountId: string, body: string) {
+  async sendMessage(
+    conversationId: string,
+    senderAccountId: string,
+    body: string,
+  ) {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
     });
 
     if (!conversation) throw new NotFoundException('Conversation not found');
-    if (conversation.isClosed) throw new ForbiddenException('Conversation is closed');
+    if (conversation.isClosed)
+      throw new ForbiddenException('Conversation is closed');
 
     if (
       senderAccountId !== conversation.userAccountId &&
@@ -321,16 +462,18 @@ export class ConversationsService {
     });
 
     if (recipient) {
-      await this.mailService.sendMail({
-        to: recipient.email,
-        subject: '[CarMesh] New message in your conversation',
-        html: `
+      await this.mailService
+        .sendMail({
+          to: recipient.email,
+          subject: '[CarMesh] New message in your conversation',
+          html: `
           <p>You have a new message:</p>
           <p>${body.replace(/\n/g, '<br>')}</p>
           <hr>
           <p>Log in to your CarMesh account to reply.</p>
         `,
-      }).catch(() => {});
+        })
+        .catch(() => {});
     }
 
     return message;

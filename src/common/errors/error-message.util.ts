@@ -1,6 +1,9 @@
 const MAX_MESSAGE_LEN = 2000;
 
-function readStringField(obj: Record<string, unknown>, key: string): string | null {
+function readStringField(
+  obj: Record<string, unknown>,
+  key: string,
+): string | null {
   const v = obj[key];
   return typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
 }
@@ -23,7 +26,10 @@ export function extractErrorMessage(err: unknown): string {
 
     const nested = o.error;
     if (nested && typeof nested === 'object') {
-      const nestedMsg = readStringField(nested as Record<string, unknown>, 'message');
+      const nestedMsg = readStringField(
+        nested as Record<string, unknown>,
+        'message',
+      );
       if (nestedMsg) return nestedMsg.slice(0, MAX_MESSAGE_LEN);
     }
 
@@ -50,7 +56,9 @@ export function extractErrorDetails(err: unknown): {
   httpCode?: number;
 } {
   const message = extractErrorMessage(err);
-  const details: { message: string; stack?: string; httpCode?: number } = { message };
+  const details: { message: string; stack?: string; httpCode?: number } = {
+    message,
+  };
   if (err instanceof Error && err.stack) {
     details.stack = err.stack;
   }
@@ -75,7 +83,11 @@ export function extractAwsS3ErrorMessage(err: unknown): string {
   if (err && typeof err === 'object') {
     const o = err as Record<string, unknown>;
     const response = o.$response as
-      | { statusCode?: number; body?: unknown; headers?: Record<string, string> }
+      | {
+          statusCode?: number;
+          body?: unknown;
+          headers?: Record<string, string>;
+        }
       | undefined;
     const status = response?.statusCode;
     const bodyText = readAwsResponseBody(response?.body);

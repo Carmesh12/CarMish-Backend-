@@ -54,7 +54,11 @@ export class AdminAccountsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: { reason?: string },
   ) {
-    return this.adminAccountsService.deactivateAccount(user.id, id, body.reason);
+    return this.adminAccountsService.deactivateAccount(
+      user.id,
+      id,
+      body.reason,
+    );
   }
 
   @Patch(':id/activate')

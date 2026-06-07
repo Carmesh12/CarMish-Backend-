@@ -60,6 +60,10 @@ export class VehicleImagesService {
       where: { vehicleId },
     });
 
+    if (existingCount + files.length > 8) {
+      throw new BadRequestException('A vehicle can have at most 8 images');
+    }
+
     const { _max } = await this.prisma.vehicleImage.aggregate({
       where: { vehicleId },
       _max: { sortOrder: true },
@@ -70,19 +74,30 @@ export class VehicleImagesService {
       files.map((file) => this.cloudinary.uploadImageBuffer(file.buffer)),
     );
 
-    return this.prisma.$transaction(
-      urls.map((imageUrl, index) =>
-        this.prisma.vehicleImage.create({
-          data: {
-            vehicleId,
-            imageUrl,
-            sortOrder: startSortOrder + index,
-            isPrimary: existingCount === 0 && index === 0,
-            angleLabel: null,
-          },
-        }),
-      ),
-    );
+    return this.prisma.$transaction(async (tx) => {
+      const images = await Promise.all(
+        urls.map((imageUrl, index) =>
+          tx.vehicleImage.create({
+            data: {
+              vehicleId,
+              imageUrl,
+              sortOrder: startSortOrder + index,
+              isPrimary: existingCount === 0 && index === 0,
+              angleLabel: null,
+            },
+          }),
+        ),
+      );
+
+      if (existingCount === 0 && urls[0]) {
+        await tx.vehicle.update({
+          where: { id: vehicleId },
+          data: { mainImageUrl: urls[0] },
+        });
+      }
+
+      return images;
+    });
   }
 
   async setPrimaryImage(user: MutationUser, imageId: string) {
@@ -109,10 +124,17 @@ export class VehicleImagesService {
         data: { isPrimary: false },
       });
 
-      return tx.vehicleImage.update({
+      const updated = await tx.vehicleImage.update({
         where: { id: imageId },
         data: { isPrimary: true },
       });
+
+      await tx.vehicle.update({
+        where: { id: vehicleId },
+        data: { mainImageUrl: updated.imageUrl },
+      });
+
+      return updated;
     });
   }
 
@@ -147,6 +169,15 @@ export class VehicleImagesService {
           await tx.vehicleImage.update({
             where: { id: nextPrimary.id },
             data: { isPrimary: true },
+          });
+          await tx.vehicle.update({
+            where: { id: vehicleId },
+            data: { mainImageUrl: nextPrimary.imageUrl },
+          });
+        } else {
+          await tx.vehicle.update({
+            where: { id: vehicleId },
+            data: { mainImageUrl: null },
           });
         }
       }

@@ -27,10 +27,7 @@ export class AdminVendorsController {
   constructor(private readonly adminVendorsService: AdminVendorsService) {}
 
   @Get('pending')
-  listPending(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
+  listPending(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.adminVendorsService.listPendingVendors(
       page ? Number(page) : 1,
       limit ? Number(limit) : 10,
@@ -73,7 +70,11 @@ export class AdminVendorsController {
     @Param('vendorId', ParseUUIDPipe) vendorId: string,
     @Body() body: { reason?: string },
   ) {
-    return this.adminVendorsService.rejectVendor(user.id, vendorId, body.reason);
+    return this.adminVendorsService.rejectVendor(
+      user.id,
+      vendorId,
+      body.reason,
+    );
   }
 
   @Post(':vendorId/message')

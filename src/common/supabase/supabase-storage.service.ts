@@ -35,28 +35,44 @@ export class SupabaseStorageService {
     const region = process.env.SUPABASE_STORAGE_REGION?.trim() || 'us-east-1';
     this.usePublicBucket =
       process.env.SUPABASE_3D_PUBLIC_BUCKET?.trim().toLowerCase() === 'true';
-    const ttlRaw = Number.parseInt(process.env.SUPABASE_3D_SIGNED_URL_TTL_SECONDS?.trim() ?? '', 10);
+    const ttlRaw = Number.parseInt(
+      process.env.SUPABASE_3D_SIGNED_URL_TTL_SECONDS?.trim() ?? '',
+      10,
+    );
     this.signedUrlTtlSeconds =
       Number.isFinite(ttlRaw) && ttlRaw > 60 ? ttlRaw : 60 * 60 * 24 * 7;
 
     const hasCredentials = Boolean(
       endpoint && accessKeyId && secretAccessKey && supabaseUrl && this.bucket,
     );
-    const placeholder = supabaseConfigLooksLikePlaceholder(supabaseUrl, endpoint);
+    const placeholder = supabaseConfigLooksLikePlaceholder(
+      supabaseUrl,
+      endpoint,
+    );
     if (placeholder) {
       this.notReadyReason =
         'Supabase URLs still use YOUR_PROJECT_REF. In backend/.env set SUPABASE_URL and SUPABASE_S3_ENDPOINT to your real project (Dashboard → Project Settings → API / Storage → S3), then restart the backend.';
-      this.logger.error(`Supabase 3D storage is misconfigured: ${this.notReadyReason}`);
+      this.logger.error(
+        `Supabase 3D storage is misconfigured: ${this.notReadyReason}`,
+      );
     } else if (!hasCredentials) {
       this.notReadyReason =
         'Supabase 3D storage env vars are missing (SUPABASE_URL, SUPABASE_S3_ENDPOINT, keys, bucket).';
-      this.logger.error(`Supabase 3D storage is misconfigured: ${this.notReadyReason}`);
+      this.logger.error(
+        `Supabase 3D storage is misconfigured: ${this.notReadyReason}`,
+      );
     } else {
       this.notReadyReason = null;
     }
     this.ready = hasCredentials && !placeholder;
 
-    if (this.ready && endpoint && accessKeyId && secretAccessKey && supabaseUrl) {
+    if (
+      this.ready &&
+      endpoint &&
+      accessKeyId &&
+      secretAccessKey &&
+      supabaseUrl
+    ) {
       this.publicBaseUrl = `${supabaseUrl}/storage/v1/object/public/${this.bucket}`;
       this.client = new S3({
         region,

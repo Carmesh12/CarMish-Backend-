@@ -29,8 +29,18 @@ export class SignupUserDto {
   @MaxLength(100)
   lastName!: string;
 
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(32)
+  phoneNumber!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  city!: string;
+
   @IsOptional()
   @IsString()
-  @MaxLength(32)
-  phoneNumber?: string;
+  @MaxLength(500)
+  address?: string;
 }

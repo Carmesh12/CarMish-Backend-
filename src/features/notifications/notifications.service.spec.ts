@@ -65,9 +65,9 @@ describe('NotificationsService', () => {
   it('rejects marking a missing notification as read', async () => {
     prisma.notification.findUnique.mockResolvedValue(null);
 
-    await expect(
-      service.markAsRead('account-1', 'missing'),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.markAsRead('account-1', 'missing')).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   it('marks all unread notifications as read for one account', async () => {

@@ -12,6 +12,12 @@ import { Vehicle3dModule } from '../vehicle-3d/vehicle-3d.module';
 @Module({
   imports: [PrismaModule, AuthModule, Vehicle3dModule],
   controllers: [VehiclesController],
-  providers: [VehiclesService, RolesGuard, SearchService, FilterService, SortService],
+  providers: [
+    VehiclesService,
+    RolesGuard,
+    SearchService,
+    FilterService,
+    SortService,
+  ],
 })
 export class VehiclesModule {}

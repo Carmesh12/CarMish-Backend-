@@ -35,7 +35,7 @@ export class VehicleImagesController {
   @Post(':vehicleId/images')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.VENDOR, Role.ADMIN)
-  @UseInterceptors(FilesInterceptor('images', 10, vehicleImagesMulterOptions))
+  @UseInterceptors(FilesInterceptor('images', 8, vehicleImagesMulterOptions))
   uploadVehicleImages(
     @CurrentUser() user: JwtUser,
     @Param('vehicleId', ParseUUIDPipe) vehicleId: string,

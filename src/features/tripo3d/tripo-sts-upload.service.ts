@@ -27,16 +27,24 @@ export class TripoStsUploadService {
   stsFormatForMime(mimetype: string): 'jpeg' | 'png' | 'webp' {
     const fmt = MIME_TO_STS[mimetype.toLowerCase()];
     if (!fmt) {
-      throw new BadRequestException('Only JPEG, PNG, and WebP images are allowed for Tripo');
+      throw new BadRequestException(
+        'Only JPEG, PNG, and WebP images are allowed for Tripo',
+      );
     }
     return fmt;
   }
 
-  async uploadImageBuffer(buffer: Buffer, mimetype: string): Promise<TripoS3Object> {
+  async uploadImageBuffer(
+    buffer: Buffer,
+    mimetype: string,
+  ): Promise<TripoS3Object> {
     const format = this.stsFormatForMime(mimetype);
-    const data = await this.tripoHttp.postJson<StsTokenResponse>('/upload/sts/token', {
-      format,
-    });
+    const data = await this.tripoHttp.postJson<StsTokenResponse>(
+      '/upload/sts/token',
+      {
+        format,
+      },
+    );
 
     const client = new S3({
       region: 'us-west-2',

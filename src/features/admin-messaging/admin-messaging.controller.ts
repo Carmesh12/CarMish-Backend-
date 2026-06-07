@@ -26,7 +26,7 @@ export class AdminMessagingController {
   constructor(private readonly messagingService: AdminMessagingService) {}
 
   @Get('threads')
-  @Roles(Role.ADMIN, Role.VENDOR)
+  @Roles(Role.ADMIN, Role.VENDOR, Role.USER)
   getMyThreads(
     @CurrentUser() user: JwtUser,
     @Query('page') page?: string,
@@ -41,7 +41,7 @@ export class AdminMessagingController {
   }
 
   @Get('threads/:id')
-  @Roles(Role.ADMIN, Role.VENDOR)
+  @Roles(Role.ADMIN, Role.VENDOR, Role.USER)
   getThread(
     @CurrentUser() user: JwtUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -50,7 +50,7 @@ export class AdminMessagingController {
   }
 
   @Post('threads/:id/reply')
-  @Roles(Role.ADMIN, Role.VENDOR)
+  @Roles(Role.ADMIN, Role.VENDOR, Role.USER)
   @HttpCode(HttpStatus.CREATED)
   replyToThread(
     @CurrentUser() user: JwtUser,

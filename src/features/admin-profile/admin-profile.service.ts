@@ -84,21 +84,32 @@ export class AdminProfileService {
       analytics,
       quickActions: [
         { id: 'edit-profile', label: 'Edit profile', path: '/admin/profile' },
-        { id: 'vendor-requests', label: 'Vendor requests', path: '/admin/vendors' },
+        {
+          id: 'vendor-requests',
+          label: 'Vendor requests',
+          path: '/admin/vendors',
+        },
         { id: 'reports', label: 'Reports', path: '/admin/reports' },
         { id: 'accounts', label: 'Manage accounts', path: '/admin/accounts' },
       ],
     };
   }
 
-  async getDashboardInsights(accountId: string, range: AdminDashboardRange = 'month') {
+  async getDashboardInsights(
+    accountId: string,
+    range: AdminDashboardRange = 'month',
+  ) {
     await this.loadAdminAccount(accountId);
     const analytics = await this.buildAnalytics(range);
     const insights = await this.generateAiInsights(analytics, range);
     return { range, insights };
   }
 
-  async chatWithAnalytics(accountId: string, message: string, range: AdminDashboardRange = 'month') {
+  async chatWithAnalytics(
+    accountId: string,
+    message: string,
+    range: AdminDashboardRange = 'month',
+  ) {
     await this.loadAdminAccount(accountId);
     const analytics = await this.buildAnalytics(range);
     const fallbackAnswer = [
@@ -111,14 +122,21 @@ export class AdminProfileService {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return { answer: fallbackAnswer, source: 'fallback' as const, suggestions: this.getChatSuggestions() };
+      return {
+        answer: fallbackAnswer,
+        source: 'fallback' as const,
+        suggestions: this.getChatSuggestions(),
+      };
     }
 
     try {
       const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
-        model: process.env.GEMINI_VENDOR_ANALYTICS_MODEL ?? 'gemini-flash-latest',
+        model:
+          process.env.GEMINI_VENDOR_ANALYTICS_MODEL ?? 'gemini-flash-latest',
       });
-      const result = await model.generateContent(this.buildChatPrompt(message, analytics, range));
+      const result = await model.generateContent(
+        this.buildChatPrompt(message, analytics, range),
+      );
       const answer = result.response.text().trim();
       return {
         answer: answer || fallbackAnswer,
@@ -126,8 +144,14 @@ export class AdminProfileService {
         suggestions: this.getChatSuggestions(),
       };
     } catch (error) {
-      this.logger.warn(`Gemini admin chat failed: ${error instanceof Error ? error.message : 'Unknown'}`);
-      return { answer: fallbackAnswer, source: 'fallback' as const, suggestions: this.getChatSuggestions() };
+      this.logger.warn(
+        `Gemini admin chat failed: ${error instanceof Error ? error.message : 'Unknown'}`,
+      );
+      return {
+        answer: fallbackAnswer,
+        source: 'fallback' as const,
+        suggestions: this.getChatSuggestions(),
+      };
     }
   }
 
@@ -154,12 +178,25 @@ export class AdminProfileService {
       this.prisma.account.count({ where: { role: Role.USER } }),
       this.prisma.account.count({ where: { role: Role.VENDOR } }),
       this.prisma.vehicle.count(),
-      this.prisma.vehicle.count({ where: { listingStatus: VehicleListingStatus.PUBLISHED } }),
-      this.prisma.vendor.count({ where: { verificationStatus: VendorVerificationStatus.PENDING } }),
+      this.prisma.vehicle.count({
+        where: { listingStatus: VehicleListingStatus.PUBLISHED },
+      }),
+      this.prisma.vendor.count({
+        where: { verificationStatus: VendorVerificationStatus.PENDING },
+      }),
       this.prisma.report.count({ where: { status: ReportStatus.PENDING } }),
-      this.prisma.purchaseRequest.findMany({ where: dateWhere, select: { status: true, offeredPrice: true, createdAt: true } }),
-      this.prisma.rentalRequest.findMany({ where: dateWhere, select: { status: true, totalPrice: true, createdAt: true } }),
-      this.prisma.vendor.groupBy({ by: ['verificationStatus'], _count: { id: true } }),
+      this.prisma.purchaseRequest.findMany({
+        where: dateWhere,
+        select: { status: true, offeredPrice: true, createdAt: true },
+      }),
+      this.prisma.rentalRequest.findMany({
+        where: dateWhere,
+        select: { status: true, totalPrice: true, createdAt: true },
+      }),
+      this.prisma.vendor.groupBy({
+        by: ['verificationStatus'],
+        _count: { id: true },
+      }),
       this.prisma.account.count({ where: { role: Role.USER, ...dateWhere } }),
       this.prisma.account.count({ where: { role: Role.VENDOR, ...dateWhere } }),
       this.prisma.vehicle.count({ where: dateWhere }),
@@ -167,7 +204,13 @@ export class AdminProfileService {
         take: 5,
         include: {
           account: { select: { email: true } },
-          _count: { select: { vehicles: true, purchaseRequests: true, rentalRequests: true } },
+          _count: {
+            select: {
+              vehicles: true,
+              purchaseRequests: true,
+              rentalRequests: true,
+            },
+          },
         },
         orderBy: { vehicles: { _count: 'desc' } },
       }),
@@ -179,14 +222,28 @@ export class AdminProfileService {
       }),
     ]);
 
-    const approvedPurchases = purchaseRequests.filter((r) => r.status === RequestStatus.APPROVED);
-    const approvedRentals = rentalRequests.filter((r) => r.status === RequestStatus.APPROVED);
-    const purchaseRevenue = approvedPurchases.reduce((s, r) => s + Number(r.offeredPrice ?? 0), 0);
-    const rentalRevenue = approvedRentals.reduce((s, r) => s + Number(r.totalPrice ?? 0), 0);
-    const totalRevenue = Math.round((purchaseRevenue + rentalRevenue) * 100) / 100;
+    const approvedPurchases = purchaseRequests.filter(
+      (r) => r.status === RequestStatus.APPROVED,
+    );
+    const approvedRentals = rentalRequests.filter(
+      (r) => r.status === RequestStatus.APPROVED,
+    );
+    const purchaseRevenue = approvedPurchases.reduce(
+      (s, r) => s + Number(r.offeredPrice ?? 0),
+      0,
+    );
+    const rentalRevenue = approvedRentals.reduce(
+      (s, r) => s + Number(r.totalPrice ?? 0),
+      0,
+    );
+    const totalRevenue =
+      Math.round((purchaseRevenue + rentalRevenue) * 100) / 100;
     const totalRequests = purchaseRequests.length + rentalRequests.length;
     const approvedRequests = approvedPurchases.length + approvedRentals.length;
-    const approvalRate = totalRequests > 0 ? Math.round((approvedRequests / totalRequests) * 100) : 0;
+    const approvalRate =
+      totalRequests > 0
+        ? Math.round((approvedRequests / totalRequests) * 100)
+        : 0;
 
     const vendorStatusMap: Record<string, number> = {};
     for (const v of vendorsByStatus) {
@@ -197,9 +254,20 @@ export class AdminProfileService {
       topReportedVehicles.map(async (r) => {
         const vehicle = await this.prisma.vehicle.findUnique({
           where: { id: r.vehicleId },
-          select: { title: true, brand: true, model: true, vendor: { select: { businessName: true } } },
+          select: {
+            title: true,
+            brand: true,
+            model: true,
+            vendor: { select: { businessName: true } },
+          },
         });
-        return { vehicleId: r.vehicleId, title: vehicle?.title ?? 'Unknown', brand: vehicle?.brand ?? '', vendorName: vehicle?.vendor?.businessName ?? '', reportCount: r._count.id };
+        return {
+          vehicleId: r.vehicleId,
+          title: vehicle?.title ?? 'Unknown',
+          brand: vehicle?.brand ?? '',
+          vendorName: vehicle?.vendor?.businessName ?? '',
+          reportCount: r._count.id,
+        };
       }),
     );
 
@@ -254,48 +322,89 @@ export class AdminProfileService {
     };
   }
 
-  private async generateAiInsights(analytics: Record<string, unknown>, range: AdminDashboardRange): Promise<AiInsight[]> {
+  private async generateAiInsights(
+    analytics: Record<string, unknown>,
+    range: AdminDashboardRange,
+  ): Promise<AiInsight[]> {
     const fallback = this.buildFallbackInsights(analytics);
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return fallback;
 
     try {
       const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
-        model: process.env.GEMINI_VENDOR_ANALYTICS_MODEL ?? 'gemini-flash-latest',
+        model:
+          process.env.GEMINI_VENDOR_ANALYTICS_MODEL ?? 'gemini-flash-latest',
       });
-      const result = await model.generateContent(this.buildInsightsPrompt(analytics, range));
+      const result = await model.generateContent(
+        this.buildInsightsPrompt(analytics, range),
+      );
       const parsed = this.parseAiInsights(result.response.text());
       return parsed.length > 0 ? parsed : fallback;
     } catch (error) {
-      this.logger.warn(`Gemini admin insights failed: ${error instanceof Error ? error.message : 'Unknown'}`);
+      this.logger.warn(
+        `Gemini admin insights failed: ${error instanceof Error ? error.message : 'Unknown'}`,
+      );
       return fallback;
     }
   }
 
-  private buildFallbackInsights(analytics: Record<string, unknown>): AiInsight[] {
+  private buildFallbackInsights(
+    analytics: Record<string, unknown>,
+  ): AiInsight[] {
     const kpis = analytics['kpis'] as Record<string, number> | undefined;
     const insights: AiInsight[] = [];
 
     if (kpis?.pendingVendors && kpis.pendingVendors > 0) {
-      insights.push({ type: 'warning', title: 'Pending vendor applications', message: `${kpis.pendingVendors} vendor applications awaiting review.`, action: 'Review and respond to pending vendors.', source: 'fallback' });
+      insights.push({
+        type: 'warning',
+        title: 'Pending vendor applications',
+        message: `${kpis.pendingVendors} vendor applications awaiting review.`,
+        action: 'Review and respond to pending vendors.',
+        source: 'fallback',
+      });
     }
     if (kpis?.openReports && kpis.openReports > 0) {
-      insights.push({ type: 'warning', title: 'Open reports', message: `${kpis.openReports} reports need attention.`, action: 'Prioritize high-severity grouped reports.', source: 'fallback' });
+      insights.push({
+        type: 'warning',
+        title: 'Open reports',
+        message: `${kpis.openReports} reports need attention.`,
+        action: 'Prioritize high-severity grouped reports.',
+        source: 'fallback',
+      });
     }
     if (kpis?.approvalRate !== undefined && kpis.approvalRate < 50) {
-      insights.push({ type: 'info', title: 'Low approval rate', message: `Only ${kpis.approvalRate}% of requests are approved.`, action: 'Investigate why vendors are rejecting so many requests.', source: 'fallback' });
+      insights.push({
+        type: 'info',
+        title: 'Low approval rate',
+        message: `Only ${kpis.approvalRate}% of requests are approved.`,
+        action: 'Investigate why vendors are rejecting so many requests.',
+        source: 'fallback',
+      });
     }
     if (kpis?.totalRevenue && kpis.totalRevenue > 0) {
-      insights.push({ type: 'success', title: 'Revenue growing', message: `Platform has generated $${Math.round(kpis.totalRevenue).toLocaleString()} in this period.`, source: 'fallback' });
+      insights.push({
+        type: 'success',
+        title: 'Revenue growing',
+        message: `Platform has generated $${Math.round(kpis.totalRevenue).toLocaleString()} in this period.`,
+        source: 'fallback',
+      });
     }
     if (insights.length === 0) {
-      insights.push({ type: 'info', title: 'Platform healthy', message: 'No critical issues detected. Keep monitoring growth.', source: 'fallback' });
+      insights.push({
+        type: 'info',
+        title: 'Platform healthy',
+        message: 'No critical issues detected. Keep monitoring growth.',
+        source: 'fallback',
+      });
     }
 
     return insights.slice(0, 5);
   }
 
-  private buildInsightsPrompt(analytics: Record<string, unknown>, range: AdminDashboardRange) {
+  private buildInsightsPrompt(
+    analytics: Record<string, unknown>,
+    range: AdminDashboardRange,
+  ) {
     return [
       'You are CarMesh Platform Admin Advisor.',
       'Analyze the admin dashboard data and produce actionable insights for the platform administrator.',
@@ -309,7 +418,11 @@ export class AdminProfileService {
     ].join('\n');
   }
 
-  private buildChatPrompt(question: string, analytics: Record<string, unknown>, range: AdminDashboardRange) {
+  private buildChatPrompt(
+    question: string,
+    analytics: Record<string, unknown>,
+    range: AdminDashboardRange,
+  ) {
     return [
       'You are CarMesh Platform Admin Assistant.',
       'Answer admin questions using only the provided platform analytics.',
@@ -327,25 +440,34 @@ export class AdminProfileService {
   }
 
   private parseAiInsights(text: string): AiInsight[] {
-    const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+    const cleaned = text
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```$/i, '')
+      .trim();
     const start = cleaned.indexOf('{');
     const end = cleaned.lastIndexOf('}');
     if (start === -1 || end === -1 || end <= start) return [];
 
     try {
-      const parsed = JSON.parse(cleaned.slice(start, end + 1)) as { insights?: unknown };
+      const parsed = JSON.parse(cleaned.slice(start, end + 1)) as {
+        insights?: unknown;
+      };
       if (!Array.isArray(parsed.insights)) return [];
       return parsed.insights
         .map((item): AiInsight | null => {
           if (!item || typeof item !== 'object') return null;
           const s = item as Record<string, unknown>;
-          if (!['success', 'warning', 'info'].includes(s.type as string)) return null;
-          if (typeof s.title !== 'string' || typeof s.message !== 'string') return null;
+          if (!['success', 'warning', 'info'].includes(s.type as string))
+            return null;
+          if (typeof s.title !== 'string' || typeof s.message !== 'string')
+            return null;
           return {
             type: s.type as 'success' | 'warning' | 'info',
-            title: (s.title as string).slice(0, 90),
-            message: (s.message as string).slice(0, 260),
-            action: typeof s.action === 'string' ? (s.action as string).slice(0, 220) : undefined,
+            title: s.title.slice(0, 90),
+            message: s.message.slice(0, 260),
+            action:
+              typeof s.action === 'string' ? s.action.slice(0, 220) : undefined,
             source: 'ai',
           };
         })
@@ -379,12 +501,26 @@ export class AdminProfileService {
     const account = await this.prisma.account.findUnique({
       where: { id: accountId },
       select: {
-        id: true, email: true, role: true, isActive: true,
-        createdAt: true, updatedAt: true,
-        admin: { select: { id: true, accountId: true, firstName: true, lastName: true, createdAt: true, updatedAt: true } },
+        id: true,
+        email: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        admin: {
+          select: {
+            id: true,
+            accountId: true,
+            firstName: true,
+            lastName: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
       },
     });
-    if (!account || account.role !== Role.ADMIN) throw new NotFoundException('Admin profile not found');
+    if (!account || account.role !== Role.ADMIN)
+      throw new NotFoundException('Admin profile not found');
     if (!account.admin) throw new NotFoundException('Admin profile not found');
     return account as AccountAdminRow;
   }
@@ -392,14 +528,23 @@ export class AdminProfileService {
   private toProfileResponse(account: AccountAdminRow) {
     const a = account.admin!;
     return {
-      accountId: account.id, email: account.email, role: account.role,
-      isActive: account.isActive, firstName: a.firstName, lastName: a.lastName,
-      accountCreatedAt: account.createdAt, accountUpdatedAt: account.updatedAt,
-      profileCreatedAt: a.createdAt, profileUpdatedAt: a.updatedAt,
+      accountId: account.id,
+      email: account.email,
+      role: account.role,
+      isActive: account.isActive,
+      firstName: a.firstName,
+      lastName: a.lastName,
+      accountCreatedAt: account.createdAt,
+      accountUpdatedAt: account.updatedAt,
+      profileCreatedAt: a.createdAt,
+      profileUpdatedAt: a.updatedAt,
     };
   }
 
-  private computeProfileCompletion(account: { email: string }, admin: { firstName: string; lastName: string }) {
+  private computeProfileCompletion(
+    account: { email: string },
+    admin: { firstName: string; lastName: string },
+  ) {
     const checks = [
       { key: 'firstName', filled: admin.firstName.trim().length > 0 },
       { key: 'lastName', filled: admin.lastName.trim().length > 0 },
@@ -407,6 +552,10 @@ export class AdminProfileService {
     ];
     const completedFields = checks.filter((c) => c.filled).map((c) => c.key);
     const missingFields = checks.filter((c) => !c.filled).map((c) => c.key);
-    return { percentage: Math.round((completedFields.length / 3) * 100), completedFields, missingFields };
+    return {
+      percentage: Math.round((completedFields.length / 3) * 100),
+      completedFields,
+      missingFields,
+    };
   }
 }

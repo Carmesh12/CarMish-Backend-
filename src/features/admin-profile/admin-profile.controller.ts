@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -29,10 +39,7 @@ export class AdminProfileController {
   }
 
   @Get('dashboard')
-  getDashboard(
-    @CurrentUser() user: JwtUser,
-    @Query('range') range?: string,
-  ) {
+  getDashboard(@CurrentUser() user: JwtUser, @Query('range') range?: string) {
     const validRange = ['week', 'month', 'year', 'all'].includes(range ?? '')
       ? (range as 'week' | 'month' | 'year' | 'all')
       : 'month';
@@ -56,9 +63,15 @@ export class AdminProfileController {
     @CurrentUser() user: JwtUser,
     @Body() body: { message: string; range?: string },
   ) {
-    const validRange = ['week', 'month', 'year', 'all'].includes(body.range ?? '')
+    const validRange = ['week', 'month', 'year', 'all'].includes(
+      body.range ?? '',
+    )
       ? (body.range as 'week' | 'month' | 'year' | 'all')
       : 'month';
-    return this.adminProfileService.chatWithAnalytics(user.id, body.message, validRange);
+    return this.adminProfileService.chatWithAnalytics(
+      user.id,
+      body.message,
+      validRange,
+    );
   }
 }

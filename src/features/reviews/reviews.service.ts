@@ -85,7 +85,7 @@ export class ReviewsService {
           },
         },
       }),
-      this.prisma.review.count({ where: { vehicleId } })
+      this.prisma.review.count({ where: { vehicleId } }),
     ]);
 
     return {
@@ -95,7 +95,7 @@ export class ReviewsService {
         page,
         limit,
         totalPages: Math.ceil(total / limit),
-      }
+      },
     };
   }
 

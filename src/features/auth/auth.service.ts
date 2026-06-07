@@ -77,7 +77,9 @@ export class AuthService {
     password: string,
     firstName: string,
     lastName: string,
-    phoneNumber?: string,
+    phoneNumber: string,
+    city: string,
+    address?: string,
   ) {
     const normalizedEmail = (email ?? '').trim().toLowerCase();
 
@@ -105,7 +107,9 @@ export class AuthService {
             create: {
               firstName: firstName.trim(),
               lastName: lastName.trim(),
-              phoneNumber: phoneNumber?.trim() || null,
+              phoneNumber: phoneNumber.trim(),
+              city: city.trim(),
+              address: address?.trim() || null,
             },
           },
         },
@@ -124,7 +128,8 @@ export class AuthService {
     );
 
     return {
-      message: 'Account created. Please check your email to verify your account.',
+      message:
+        'Account created. Please check your email to verify your account.',
     };
   }
 
@@ -182,7 +187,8 @@ export class AuthService {
     );
 
     return {
-      message: 'Account created. Please check your email to verify your account.',
+      message:
+        'Account created. Please check your email to verify your account.',
     };
   }
 

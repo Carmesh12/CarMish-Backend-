@@ -1,6 +1,14 @@
 import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { FuelType, ListingType, TransmissionType, VehicleAvailabilityStatus } from '@prisma/client';
+import {
+  BodyType,
+  DrivetrainType,
+  FuelType,
+  ListingType,
+  TransmissionType,
+  VehicleAvailabilityStatus,
+  VehicleCondition,
+} from '@prisma/client';
 
 export class GetVehiclesFilterDto {
   @IsOptional()
@@ -16,22 +24,22 @@ export class GetVehiclesFilterDto {
   locationCity?: string;
 
   @IsOptional()
-  @Transform(({ value }) => parseInt(value, 10))
+  @Transform(({ value }: { value: unknown }) => parseInt(String(value), 10))
   @IsNumber()
   yearFrom?: number;
 
   @IsOptional()
-  @Transform(({ value }) => parseInt(value, 10))
+  @Transform(({ value }: { value: unknown }) => parseInt(String(value), 10))
   @IsNumber()
   yearTo?: number;
 
   @IsOptional()
-  @Transform(({ value }) => parseFloat(value))
+  @Transform(({ value }: { value: unknown }) => parseFloat(String(value)))
   @IsNumber()
   priceMin?: number;
 
   @IsOptional()
-  @Transform(({ value }) => parseFloat(value))
+  @Transform(({ value }: { value: unknown }) => parseFloat(String(value)))
   @IsNumber()
   priceMax?: number;
 
@@ -40,8 +48,24 @@ export class GetVehiclesFilterDto {
   fuelType?: FuelType;
 
   @IsOptional()
+  @IsEnum(FuelType)
+  engineType?: FuelType;
+
+  @IsOptional()
   @IsEnum(TransmissionType)
   transmission?: TransmissionType;
+
+  @IsOptional()
+  @IsEnum(VehicleCondition)
+  condition?: VehicleCondition;
+
+  @IsOptional()
+  @IsEnum(DrivetrainType)
+  drivetrain?: DrivetrainType;
+
+  @IsOptional()
+  @IsEnum(BodyType)
+  bodyType?: BodyType;
 
   @IsOptional()
   @IsEnum(ListingType)

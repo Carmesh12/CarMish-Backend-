@@ -1,4 +1,8 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 
 type TripoEnvelope<T> = { code?: number; data?: T; message?: string };
 
@@ -8,10 +12,9 @@ export class TripoHttpService {
 
   get baseUrl(): string {
     const raw = process.env.TRIPO_API_BASE_URL?.trim();
-    return (raw && raw.length > 0 ? raw : 'https://api.tripo3d.ai/v2/openapi').replace(
-      /\/$/,
-      '',
-    );
+    return (
+      raw && raw.length > 0 ? raw : 'https://api.tripo3d.ai/v2/openapi'
+    ).replace(/\/$/, '');
   }
 
   get apiKey(): string {
@@ -46,7 +49,9 @@ export class TripoHttpService {
     };
 
     const res = await fetch(url, { method, headers, body: init?.body });
-    const traceId = res.headers.get('x-tripo-trace-id') ?? res.headers.get('X-Tripo-Trace-ID');
+    const traceId =
+      res.headers.get('x-tripo-trace-id') ??
+      res.headers.get('X-Tripo-Trace-ID');
 
     let parsed: unknown;
     try {
@@ -76,7 +81,13 @@ export class TripoHttpService {
     }
 
     const env = parsed as TripoEnvelope<T> & { code?: number };
-    if (env && typeof env === 'object' && 'code' in env && env.code !== undefined && env.code !== 0) {
+    if (
+      env &&
+      typeof env === 'object' &&
+      'code' in env &&
+      env.code !== undefined &&
+      env.code !== 0
+    ) {
       const msg =
         typeof env.message === 'string'
           ? env.message
@@ -84,13 +95,21 @@ export class TripoHttpService {
       this.logger.warn(
         `Tripo business error ${method} ${path} trace=${traceId ?? 'n/a'} message=${msg}`,
       );
-      const err = new Error(msg) as Error & { status: number; traceId?: string };
+      const err = new Error(msg) as Error & {
+        status: number;
+        traceId?: string;
+      };
       err.status = res.status;
       err.traceId = traceId ?? undefined;
       throw err;
     }
 
-    if (env && typeof env === 'object' && 'data' in env && env.data !== undefined) {
+    if (
+      env &&
+      typeof env === 'object' &&
+      'data' in env &&
+      env.data !== undefined
+    ) {
       if (traceId) {
         this.logger.debug(`Tripo trace=${traceId} ${method} ${path}`);
       }

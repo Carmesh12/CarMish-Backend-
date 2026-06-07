@@ -55,7 +55,10 @@ export class PersonalVehicle3dController {
   }
 
   @Get('personal-3d-jobs/:jobId')
-  getJob(@CurrentUser() user: JwtUser, @Param('jobId', ParseUUIDPipe) jobId: string) {
+  getJob(
+    @CurrentUser() user: JwtUser,
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+  ) {
     return this.vehicle3dService.getPersonalJob(user.id, jobId);
   }
 

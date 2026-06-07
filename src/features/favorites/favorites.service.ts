@@ -23,7 +23,9 @@ export class FavoritesService {
     }
 
     if (vehicle.listingStatus !== VehicleListingStatus.PUBLISHED) {
-      throw new ForbiddenException('Cannot favorite a vehicle that is not published');
+      throw new ForbiddenException(
+        'Cannot favorite a vehicle that is not published',
+      );
     }
 
     const existingFavorite = await this.prisma.favorite.findUnique({
@@ -137,7 +139,9 @@ export class FavoritesService {
     }
 
     if (vehicle.listingStatus !== VehicleListingStatus.PUBLISHED) {
-      throw new ForbiddenException('Cannot favorite a vehicle that is not published');
+      throw new ForbiddenException(
+        'Cannot favorite a vehicle that is not published',
+      );
     }
 
     await this.prisma.favorite.create({
