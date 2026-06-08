@@ -7,6 +7,8 @@ import { Vehicle3dService } from './vehicle-3d.service';
 import { VendorVehicle3dController } from './vendor-vehicle-3d.controller';
 import { PersonalVehicle3dController } from './personal-vehicle-3d.controller';
 import { ThreeDGenerationController } from './three-d-generation.controller';
+import { WheelEditorController } from './wheel-editor.controller';
+import { WheelEditorService } from './wheel-editor.service';
 
 @Module({
   imports: [PrismaModule, AuthModule, Tripo3dModule, SupabaseStorageModule],
@@ -14,8 +16,9 @@ import { ThreeDGenerationController } from './three-d-generation.controller';
     VendorVehicle3dController,
     PersonalVehicle3dController,
     ThreeDGenerationController,
+    WheelEditorController,
   ],
-  providers: [Vehicle3dService],
+  providers: [Vehicle3dService, WheelEditorService],
   exports: [Vehicle3dService],
 })
 export class Vehicle3dModule {}

@@ -16,6 +16,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TripoHttpService } from '../tripo3d/tripo-http.service';
 import { TripoMultiviewPipelineService } from '../tripo3d/tripo-multiview-pipeline.service';
 import type { MultiviewSlot } from '../tripo3d/tripo-multiview-pipeline.service';
+import { GlbPivotNormalizerService } from '../tripo3d/glb-pivot-normalizer.service';
 import { SupabaseStorageService } from '../../common/supabase/supabase-storage.service';
 import {
   extractErrorDetails,
@@ -43,6 +44,7 @@ export class Vehicle3dService {
     private readonly tripoHttp: TripoHttpService,
     private readonly pipeline: TripoMultiviewPipelineService,
     private readonly storage: SupabaseStorageService,
+    private readonly pivotNormalizer: GlbPivotNormalizerService,
   ) {}
 
   private async findVendorByAccount(accountId: string) {
@@ -264,7 +266,12 @@ export class Vehicle3dService {
       this.logger.log(
         `[MOCK] Uploading GLB job=${jobId} bytes=${modelFile.buffer.length}`,
       );
-      const modelUrl = await this.storage.uploadGlbBuffer(modelFile.buffer, {
+      const normalizedBuffer =
+        await this.pivotNormalizer.normalizeBottomCenterPivot(
+          modelFile.buffer,
+          `vendor-vehicle=${vehicleId} job=${jobId}`,
+        );
+      const modelUrl = await this.storage.uploadGlbBuffer(normalizedBuffer, {
         context: `vendor-vehicle=${vehicleId} job=${jobId}`,
       });
 
@@ -500,7 +507,12 @@ export class Vehicle3dService {
       this.logger.log(
         `[MOCK] Uploading GLB job=${jobId} bytes=${modelFile.buffer.length}`,
       );
-      const modelUrl = await this.storage.uploadGlbBuffer(modelFile.buffer, {
+      const normalizedBuffer =
+        await this.pivotNormalizer.normalizeBottomCenterPivot(
+          modelFile.buffer,
+          `personal-user=${userId} job=${jobId}`,
+        );
+      const modelUrl = await this.storage.uploadGlbBuffer(normalizedBuffer, {
         context: `personal-user=${userId} job=${jobId}`,
       });
 

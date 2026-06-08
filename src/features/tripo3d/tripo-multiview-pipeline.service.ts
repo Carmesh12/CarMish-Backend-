@@ -6,10 +6,15 @@ import {
 import { TripoHttpService } from './tripo-http.service';
 import { TripoStsUploadService } from './tripo-sts-upload.service';
 import { SupabaseStorageService } from '../../common/supabase/supabase-storage.service';
+import { GlbPivotNormalizerService } from './glb-pivot-normalizer.service';
 
 export type MultiviewSlot = { buffer: Buffer; mimetype: string };
 
 type TripoOutputField = string | { url?: string } | null | undefined;
+type TripoFileObject = {
+  type: string;
+  object: { bucket: string; key: string };
+};
 
 type TripoTaskState = {
   task_id?: string;
@@ -39,10 +44,23 @@ export class TripoMultiviewPipelineService {
     private readonly tripoHttp: TripoHttpService,
     private readonly stsUpload: TripoStsUploadService,
     private readonly storage: SupabaseStorageService,
+    private readonly pivotNormalizer: GlbPivotNormalizerService,
   ) {}
 
   private modelVersion(): string {
     return process.env.TRIPO_MULTIVIEW_MODEL_VERSION?.trim() || 'v3.1-20260211';
+  }
+
+  private textureModelVersion(): string {
+    return process.env.TRIPO_TEXTURE_MODEL_VERSION?.trim() || 'v3.0-20250812';
+  }
+
+  private textureQuality(): string {
+    return process.env.TRIPO_TEXTURE_QUALITY?.trim() || 'standard';
+  }
+
+  private textureAlignment(): string {
+    return process.env.TRIPO_TEXTURE_ALIGNMENT?.trim() || 'geometry';
   }
 
   private fileTypeForMime(mimetype: string): string {
@@ -123,9 +141,65 @@ export class TripoMultiviewPipelineService {
     return glbBuffer;
   }
 
+  private extractTaskId(created: Record<string, unknown>): string {
+    const taskId =
+      (typeof created.task_id === 'string' && created.task_id) ||
+      (typeof created.taskId === 'string' && created.taskId) ||
+      null;
+
+    if (!taskId) {
+      throw new Error('Tripo did not return task_id');
+    }
+
+    return taskId;
+  }
+
+  private async createSegmentedModelTask(
+    files: TripoFileObject[],
+  ): Promise<string> {
+    const created = await this.tripoHttp.postJson<Record<string, unknown>>(
+      '/task',
+      {
+        type: 'multiview_to_model',
+        files,
+        model_version: this.modelVersion(),
+        generate_parts: true,
+        texture: false,
+        pbr: false,
+        quad: false,
+      },
+    );
+
+    return this.extractTaskId(created);
+  }
+
+  private async createTextureTask(
+    originalModelTaskId: string,
+    files: TripoFileObject[],
+  ): Promise<string> {
+    const created = await this.tripoHttp.postJson<Record<string, unknown>>(
+      '/task',
+      {
+        type: 'texture_model',
+        original_model_task_id: originalModelTaskId,
+        model_version: this.textureModelVersion(),
+        texture_prompt: {
+          images: files,
+        },
+        texture: true,
+        pbr: true,
+        texture_quality: this.textureQuality(),
+        texture_alignment: this.textureAlignment(),
+        bake: true,
+      },
+    );
+
+    return this.extractTaskId(created);
+  }
+
   /**
-   * Uploads four views (front, left, back, right), runs Tripo multiview_to_model (H3),
-   * polls (logs progress only to Nest Logger), downloads GLB, stores on Supabase.
+   * Uploads four views (front, left, back, right), runs Tripo segmented
+   * multiview generation, then textures the segmented task and stores the final GLB.
    */
   async runToStoredGlbUrl(
     slots: MultiviewSlot[],
@@ -136,7 +210,7 @@ export class TripoMultiviewPipelineService {
       throw new Error('multiview_to_model requires exactly 4 image slots');
     }
 
-    const files: Record<string, unknown>[] = [];
+    const files: TripoFileObject[] = [];
     for (let i = 0; i < 4; i++) {
       const slot = slots[i];
       const obj = await this.stsUpload.uploadImageBuffer(
@@ -149,42 +223,46 @@ export class TripoMultiviewPipelineService {
       });
     }
 
-    const taskBody = {
-      type: 'multiview_to_model',
-      files,
-      model_version: this.modelVersion(),
-      texture: true,
-      pbr: true,
-    };
-
-    const created = await this.tripoHttp.postJson<Record<string, unknown>>(
-      '/task',
-      taskBody,
+    const segmentedTaskId = await this.createSegmentedModelTask(files);
+    this.logger.log(
+      `[${logLabel}] Tripo segmented task submitted task=${segmentedTaskId}`,
     );
-    const taskId =
-      (typeof created.task_id === 'string' && created.task_id) ||
-      (typeof created.taskId === 'string' && created.taskId) ||
-      null;
-    if (!taskId) {
-      throw new Error('Tripo did not return task_id');
-    }
 
     if (hooks?.onTripoTaskSubmitted) {
-      await hooks.onTripoTaskSubmitted(taskId);
+      await hooks.onTripoTaskSubmitted(segmentedTaskId);
     }
 
-    const picked = await this.pollUntilTerminal(taskId, logLabel);
+    await this.pollUntilTerminal(segmentedTaskId, `${logLabel} segmented`);
+
+    const textureTaskId = await this.createTextureTask(segmentedTaskId, files);
+    this.logger.log(
+      `[${logLabel}] Tripo texture task submitted task=${textureTaskId}`,
+    );
+
+    if (hooks?.onTripoTaskSubmitted) {
+      await hooks.onTripoTaskSubmitted(textureTaskId);
+    }
+
+    const picked = await this.pollUntilTerminal(
+      textureTaskId,
+      `${logLabel} texture`,
+    );
     this.logger.log(
       `[${logLabel}] Tripo output field=${picked.field} host=${urlHostForLog(picked.url)}`,
     );
 
     const glbBuffer = await this.downloadTripoModel(picked.url, logLabel);
+    const normalizedGlbBuffer =
+      await this.pivotNormalizer.normalizeBottomCenterPivot(
+        glbBuffer,
+        logLabel,
+      );
 
     this.logger.log(
-      `[${logLabel}] Uploading GLB to Supabase (${glbBuffer.length} bytes)`,
+      `[${logLabel}] Uploading bottom-center GLB to Supabase (${normalizedGlbBuffer.length} bytes)`,
     );
     try {
-      const publicUrl = await this.storage.uploadGlbBuffer(glbBuffer, {
+      const publicUrl = await this.storage.uploadGlbBuffer(normalizedGlbBuffer, {
         context: logLabel,
       });
       this.logger.log(

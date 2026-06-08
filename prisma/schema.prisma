@@ -408,9 +408,21 @@ model Vehicle3DModel {
   vehicle       Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   job           Vehicle3DJob?        @relation(fields: [jobId], references: [id], onDelete: SetNull)
   printRequests ThreeDPrintRequest[]
+  wheelEdit     Vehicle3DWheelEdit?
 
   @@index([vehicleId])
   @@index([jobId])
+}
+
+model Vehicle3DWheelEdit {
+  id                String   @id @default(uuid()) @db.Uuid
+  vehicle3DModelId  String   @unique @db.Uuid
+  selectedWheelId   String
+  selectedWheelName String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  vehicle3DModel Vehicle3DModel @relation(fields: [vehicle3DModelId], references: [id], onDelete: Cascade)
 }
 
 model PersonalVehicle3DJob {
@@ -442,12 +454,24 @@ model PersonalVehicle3DModel {
   status          Vehicle3DModelStatus @default(AVAILABLE)
   generatedAt     DateTime             @default(now())
 
-  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  job           PersonalVehicle3DJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  user          User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job           PersonalVehicle3DJob?       @relation(fields: [jobId], references: [id], onDelete: SetNull)
   printRequests ThreeDPrintRequest[]
+  wheelEdit     PersonalVehicle3DWheelEdit?
 
   @@index([userId])
   @@index([jobId])
+}
+
+model PersonalVehicle3DWheelEdit {
+  id                       String   @id @default(uuid()) @db.Uuid
+  personalVehicle3DModelId String   @unique @db.Uuid
+  selectedWheelId          String
+  selectedWheelName        String
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  personalVehicle3DModel PersonalVehicle3DModel @relation(fields: [personalVehicle3DModelId], references: [id], onDelete: Cascade)
 }
 
 model ThreeDPrintRequest {

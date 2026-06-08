@@ -56,6 +56,7 @@ describe('Vehicle3dService smoke checks', () => {
       tripoHttp as never,
       {} as never,
       storage as never,
+      {} as never,
     );
   });
 
